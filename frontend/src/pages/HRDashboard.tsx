@@ -1,12 +1,16 @@
+// AIModified:2026-01-11T12:21:40Z
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import { apiService } from '@/services/api'
 import type {
   Skill,
   InterviewLevel,
   MatchedPanel,
   ScheduledInterview,
   AvailabilitySlot,
+  InterviewType,
+  Interviewee,
 } from '@/types'
 import { formatDate, getMinDateTime, isFutureDateTime } from '@/utils/dateUtils'
 
@@ -14,27 +18,25 @@ export const HRDashboard: React.FC = () => {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  // Form state
-  const [candidateName, setCandidateName] = useState('')
-  const [candidateEmail, setCandidateEmail] = useState('')
+  // Form state (candidate name/email removed from search form)
   const [interviewLevel, setInterviewLevel] = useState<InterviewLevel>('L1')
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
   const [interviewDate, setInterviewDate] = useState('')
   const [interviewTime, setInterviewTime] = useState('')
 
-  // Available skills (from API/master list)
-  const [availableSkills] = useState<Skill[]>([
-    { id: '1', name: 'React', type: 'PRIMARY' },
-    { id: '2', name: 'TypeScript', type: 'PRIMARY' },
-    { id: '3', name: 'Node.js', type: 'PRIMARY' },
-    { id: '4', name: 'Python', type: 'SECONDARY' },
-    { id: '5', name: 'Java', type: 'SECONDARY' },
-    { id: '6', name: 'AWS', type: 'SECONDARY' },
-    { id: '7', name: 'Docker', type: 'PRIMARY' },
-    { id: '8', name: 'Kubernetes', type: 'SECONDARY' },
-    { id: '9', name: 'MongoDB', type: 'SECONDARY' },
-    { id: '10', name: 'PostgreSQL', type: 'SECONDARY' },
-  ])
+  // Booking modal state
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
+  const [bookingCandidateName, setBookingCandidateName] = useState('')
+  const [bookingCandidateEmail, setBookingCandidateEmail] = useState('')
+  const [pendingBooking, setPendingBooking] = useState<{ panelId: number; slot?: AvailabilitySlot } | null>(null)
+  const [isBooking, setIsBooking] = useState(false)
+
+  // Available skills (from API)
+  const [availableSkills, setAvailableSkills] = useState<Skill[]>([])
+  const [interviewTypes, setInterviewTypes] = useState<InterviewType[]>([])
+  const [interviewees, setInterviewees] = useState<Interviewee[]>([])
+  const [isLoadingSkills, setIsLoadingSkills] = useState(true)
+  const [isSearching, setIsSearching] = useState(false)
 
   // Matched panels (mock data - will be replaced with API call)
   const [matchedPanels, setMatchedPanels] = useState<MatchedPanel[]>([])
@@ -46,21 +48,78 @@ export const HRDashboard: React.FC = () => {
   // Scheduled interviews
   const [scheduledInterviews, setScheduledInterviews] = useState<
     ScheduledInterview[]
-  >([
-    {
-      id: '1',
-      candidateName: 'John Doe',
-      candidateEmail: 'john.doe@example.com',
-      panelName: 'Jane Smith',
-      panelEmail: 'jane.smith@example.com',
-      level: 'L1',
-      date: '2024-01-20',
-      startTime: '10:00',
-      endTime: '11:00',
-      skills: ['React', 'TypeScript'],
-      status: 'SCHEDULED',
-    },
-  ])
+  >([])
+  const [isLoadingInterviews, setIsLoadingInterviews] = useState(false)
+
+  // Load skills and interview types on mount - use ref to prevent double calls in StrictMode
+  const hasLoadedInitialData = useRef(false)
+  useEffect(() => {
+    // Prevent double calls in React StrictMode
+    if (hasLoadedInitialData.current) return
+    hasLoadedInitialData.current = true
+
+    const loadInitialData = async () => {
+      try {
+        setIsLoadingSkills(true)
+        const [skillsData, typesData, intervieweesData] = await Promise.all([
+          apiService.getSkills(),
+          apiService.getInterviewTypes(),
+          apiService.getInterviewees(),
+        ])
+        setAvailableSkills(skillsData)
+        setInterviewTypes(typesData)
+        setInterviewees(intervieweesData)
+      } catch (err: any) {
+        setError('Failed to load initial data: ' + (err.message || 'Unknown error'))
+        hasLoadedInitialData.current = false // Reset on error to allow retry
+      } finally {
+        setIsLoadingSkills(false)
+      }
+    }
+    loadInitialData()
+  }, [])
+
+  // Load scheduled interviews on mount - use ref to prevent double calls in StrictMode
+  const hasLoadedInterviews = useRef(false)
+  useEffect(() => {
+    // Prevent double calls in React StrictMode
+    if (hasLoadedInterviews.current) return
+    hasLoadedInterviews.current = true
+
+    const loadScheduledInterviews = async () => {
+      try {
+        setIsLoadingInterviews(true)
+        setError(null) // Clear any previous errors
+        const interviewsData = await apiService.getAllScheduledInterviews()
+        // Filter out cancelled interviews for HR dashboard
+        const activeInterviews = interviewsData.filter((interview: any) => {
+          const statusUpper = (interview.status || '').toUpperCase()
+          return statusUpper === 'SCHEDULED'
+        })
+        const formattedInterviews: ScheduledInterview[] = activeInterviews.map((interview: any) => ({
+          id: interview.id,
+          candidateName: interview.candidateName,
+          candidateEmail: interview.candidateEmail,
+          panelName: interview.panelName,
+          panelEmail: interview.panelEmail,
+          level: interview.level,
+          date: interview.scheduledDate,
+          startTime: interview.startTime,
+          endTime: interview.endTime,
+          skills: interview.skills || [],
+          status: interview.status || 'SCHEDULED',
+        }))
+        setScheduledInterviews(formattedInterviews)
+      } catch (err: any) {
+        console.error('Error loading scheduled interviews:', err)
+        setError('Failed to load scheduled interviews: ' + (err.response?.data?.message || err.message || 'Unknown error'))
+        hasLoadedInterviews.current = false // Reset on error to allow retry
+      } finally {
+        setIsLoadingInterviews(false)
+      }
+    }
+    loadScheduledInterviews()
+  }, [])
 
   // Close skill dropdown when clicking outside
   useEffect(() => {
@@ -91,188 +150,238 @@ export const HRDashboard: React.FC = () => {
     return availableSkills.filter(
       (skill) =>
         skill.name.toLowerCase().includes(query) &&
-        !selectedSkills.includes(skill.id)
+        !selectedSkills.includes(skill.id.toString())
     )
   }, [availableSkills, skillSearchQuery, selectedSkills])
 
   // Handle form submission to find matching panels
-  const handleSubmitForm = useCallback(() => {
-    if (!candidateName || !candidateEmail || selectedSkills.length === 0) {
-      setError('Please fill in candidate name, email, and select at least one skill')
-      setTimeout(() => setError(null), 5000)
+  const handleSubmitForm = useCallback(async () => {
+    if (selectedSkills.length === 0) {
+      setError('Please select at least one skill')
       return
     }
     setError(null)
+    setIsSearching(true)
 
-    // Mock API call - will be replaced with actual API
-    // This simulates getting matched panels with availability slots
-    const mockMatchedPanels: MatchedPanel[] = [
-      {
-        id: '1',
-        name: 'Jane Smith',
-        email: 'jane.smith@example.com',
-        matchPercentage: 85,
-        matchedSkills: ['React', 'TypeScript'],
-        panelSkills: [
-          { id: '1', name: 'React', type: 'PRIMARY' },
-          { id: '2', name: 'TypeScript', type: 'PRIMARY' },
-          { id: '3', name: 'Node.js', type: 'PRIMARY' },
-        ],
-        availabilitySlots: interviewDate && interviewTime
-          ? [
-              // If date/time provided, show slots matching that time
-              (() => {
-                const [hours, minutes] = interviewTime.split(':')
-                const endHour = String(parseInt(hours) + 1).padStart(2, '0')
-                return { id: '1', date: interviewDate, startTime: interviewTime, endTime: `${endHour}:${minutes}` }
-              })(),
-            ]
-          : [
-              // If no date/time, show all available slots
-              { id: '1', date: '2024-01-20', startTime: '09:00', endTime: '10:00' },
-              { id: '2', date: '2024-01-20', startTime: '14:00', endTime: '15:00' },
-              { id: '3', date: '2024-01-21', startTime: '10:00', endTime: '11:00' },
-            ],
-      },
-      {
-        id: '2',
-        name: 'Bob Johnson',
-        email: 'bob.johnson@example.com',
-        matchPercentage: 70,
-        matchedSkills: ['React', 'Node.js'],
-        panelSkills: [
-          { id: '1', name: 'React', type: 'PRIMARY' },
-          { id: '3', name: 'Node.js', type: 'PRIMARY' },
-          { id: '4', name: 'Python', type: 'SECONDARY' },
-        ],
-        availabilitySlots: interviewDate && interviewTime
-          ? [
-              (() => {
-                const [hours, minutes] = interviewTime.split(':')
-                const endHour = String(parseInt(hours) + 1).padStart(2, '0')
-                return { id: '1', date: interviewDate, startTime: interviewTime, endTime: `${endHour}:${minutes}` }
-              })(),
-            ]
-          : [
-              { id: '1', date: '2024-01-20', startTime: '11:00', endTime: '12:00' },
-              { id: '2', date: '2024-01-22', startTime: '15:00', endTime: '16:00' },
-            ],
-      },
-      {
-        id: '3',
-        name: 'Alice Williams',
-        email: 'alice.williams@example.com',
-        matchPercentage: 60,
-        matchedSkills: ['TypeScript'],
-        panelSkills: [
-          { id: '2', name: 'TypeScript', type: 'PRIMARY' },
-          { id: '5', name: 'Java', type: 'SECONDARY' },
-        ],
-        availabilitySlots: interviewDate && interviewTime
-          ? [
-              (() => {
-                const [hours, minutes] = interviewTime.split(':')
-                const endHour = String(parseInt(hours) + 1).padStart(2, '0')
-                return { id: '1', date: interviewDate, startTime: interviewTime, endTime: `${endHour}:${minutes}` }
-              })(),
-            ]
-          : [
-              { id: '1', date: '2024-01-21', startTime: '09:00', endTime: '10:00' },
-              { id: '2', date: '2024-01-23', startTime: '13:00', endTime: '14:00' },
-            ],
-      },
-    ]
-    
-    // Update matched panels - this will trigger re-render
-    setMatchedPanels(mockMatchedPanels)
-  }, [candidateName, candidateEmail, selectedSkills, interviewDate, interviewTime, interviewLevel])
+    try {
+      // Find interview type ID based on level
+      const interviewType = interviewTypes.find(t => t.name.includes(interviewLevel))
+      const primarySkillIds = selectedSkills.map(id => parseInt(id)).filter(id => !isNaN(id))
+      
+      const searchParams = {
+        primarySkillIds,
+        secondarySkillIds: [],
+        interviewTypeId: interviewType?.id,
+        interviewDate: interviewDate || undefined,
+      }
+
+      const matchedPanelsData = await apiService.searchAvailableInterviewers(searchParams)
+      
+      // Calculate match percentage and matched skills
+      const selectedSkillNames = selectedSkills
+        .map(id => availableSkills.find(s => s.id.toString() === id)?.name)
+        .filter(Boolean) as string[]
+
+      const enrichedPanels: MatchedPanel[] = matchedPanelsData.map(panel => {
+        const matchedSkills = panel.skills.filter(skill => selectedSkillNames.includes(skill))
+        const matchPercentage = selectedSkillNames.length > 0
+          ? Math.round((matchedSkills.length / selectedSkillNames.length) * 100)
+          : 0
+
+        // Convert availableTimeSlots to AvailabilitySlot format
+        const availabilitySlots: AvailabilitySlot[] = panel.availableTimeSlots.map((slot, idx) => ({
+          id: idx,
+          date: slot.date,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+        }))
+
+        return {
+          ...panel,
+          matchPercentage,
+          matchedSkills,
+          availabilitySlots,
+        }
+      })
+
+      setMatchedPanels(enrichedPanels)
+    } catch (err: any) {
+      setError('Failed to search for available interviewers: ' + (err.response?.data?.message || err.message || 'Unknown error'))
+    } finally {
+      setIsSearching(false)
+    }
+  }, [selectedSkills, interviewDate, interviewTime, interviewLevel, interviewTypes, availableSkills])
 
   const handleLogout = useCallback(async () => {
     await logout()
     navigate('/login', { replace: true })
   }, [logout, navigate])
 
-  const toggleSkill = useCallback((skillId: string) => {
+  const toggleSkill = useCallback((skillId: string | number) => {
+    const idStr = skillId.toString()
     setSelectedSkills((prev) =>
-      prev.includes(skillId)
-        ? prev.filter((id) => id !== skillId)
-        : [...prev, skillId]
+      prev.includes(idStr)
+        ? prev.filter((id) => id !== idStr)
+        : [...prev, idStr]
     )
   }, [])
 
+  // Open booking modal
   const handleBookInterview = useCallback(
-    (panelId: string, slot?: AvailabilitySlot) => {
-      if (!candidateName || !candidateEmail) {
+    (panelId: number, slot?: AvailabilitySlot) => {
+      setPendingBooking({ panelId, slot })
+      setBookingCandidateName('')
+      setBookingCandidateEmail('')
+      setIsBookingModalOpen(true)
+    },
+    []
+  )
+
+  // Confirm booking from modal
+  const handleConfirmBooking = useCallback(
+    async () => {
+      if (!bookingCandidateName || !bookingCandidateEmail) {
         setError('Please fill in candidate name and email')
-        setTimeout(() => setError(null), 5000)
         return
       }
 
-      const panel = matchedPanels.find((p) => p.id === panelId)
+      if (!pendingBooking) {
+        setError('No booking pending')
+        return
+      }
+
+      const { panelId, slot } = pendingBooking
+      const panel = matchedPanels.find((p) => p.interviewerProfileId === panelId)
       if (!panel) {
         setError('Panel not found')
-        setTimeout(() => setError(null), 5000)
         return
       }
 
       // Use provided slot or first available slot
-      const selectedSlot = slot || panel.availabilitySlots[0]
+      const selectedSlot = slot || panel.availabilitySlots?.[0]
       if (!selectedSlot) {
         setError('No availability slot selected')
-        setTimeout(() => setError(null), 5000)
         return
       }
       setError(null)
+      setIsBooking(true)
 
-    const newInterview: ScheduledInterview = {
-      id: Date.now().toString(),
-      candidateName,
-      candidateEmail,
-      panelName: panel.name,
-      panelEmail: panel.email,
-      level: interviewLevel,
-      date: selectedSlot.date,
-      startTime: selectedSlot.startTime,
-      endTime: selectedSlot.endTime,
-      skills: selectedSkills.map(
-        (id) => availableSkills.find((s) => s.id === id)?.name || ''
-      ),
-      status: 'SCHEDULED',
-      hrName: user?.name || '',
-      hrEmail: user?.email || '',
-    }
+      try {
+        // Find or create interviewee
+        let interviewee = interviewees.find(i => i.email === bookingCandidateEmail)
+        if (!interviewee) {
+          interviewee = await apiService.createInterviewee({
+            name: bookingCandidateName,
+            email: bookingCandidateEmail,
+          })
+          setInterviewees(prev => [...prev, interviewee!])
+        }
 
-      setScheduledInterviews((prev) => [...prev, newInterview])
-      // Reset form
-      setCandidateName('')
-      setCandidateEmail('')
-      setSelectedSkills([])
-      setInterviewDate('')
-      setInterviewTime('')
-      setMatchedPanels([])
+        // Find interview type
+        const interviewType = interviewTypes.find(t => t.name.includes(interviewLevel))
+        if (!interviewType) {
+          setError('Interview type not found')
+          setIsBooking(false)
+          return
+        }
+
+        // Get selected skill IDs
+        const primarySkillIds = selectedSkills
+          .map(id => availableSkills.find(s => s.id.toString() === id)?.id)
+          .filter((id): id is number => id !== undefined)
+
+        // Create interview
+        const interview = await apiService.createInterview({
+          interviewerProfileId: panelId,
+          intervieweeId: interviewee.id,
+          interviewTypeId: interviewType.id,
+          scheduledDate: selectedSlot.date,
+          startTime: selectedSlot.startTime,
+          endTime: selectedSlot.endTime,
+          primarySkillIds,
+          secondarySkillIds: [],
+        })
+
+        // Add to scheduled interviews list
+        const newInterview: ScheduledInterview = {
+          id: interview.id,
+          candidateName: bookingCandidateName,
+          candidateEmail: bookingCandidateEmail,
+          panelName: panel.name,
+          level: interviewLevel,
+          date: selectedSlot.date,
+          startTime: selectedSlot.startTime,
+          endTime: selectedSlot.endTime,
+          skills: selectedSkills.map(
+            (id) => availableSkills.find((s) => s.id.toString() === id)?.name || ''
+          ).filter(Boolean),
+          status: interview.status || 'SCHEDULED',
+        }
+
+        setScheduledInterviews((prev) => [...prev, newInterview])
+        
+        // Close modal and reset
+        setIsBookingModalOpen(false)
+        setPendingBooking(null)
+        setBookingCandidateName('')
+        setBookingCandidateEmail('')
+        setSelectedSkills([])
+        setInterviewDate('')
+        setInterviewTime('')
+        setMatchedPanels([])
+      } catch (err: any) {
+        setError('Failed to schedule interview: ' + (err.response?.data?.message || err.message || 'Unknown error'))
+      } finally {
+        setIsBooking(false)
+      }
     },
     [
-      candidateName,
-      candidateEmail,
+      bookingCandidateName,
+      bookingCandidateEmail,
+      pendingBooking,
       selectedSkills,
       interviewLevel,
       matchedPanels,
-      user,
       availableSkills,
+      interviewTypes,
+      interviewees,
     ]
   )
 
-  const handleCancelInterview = useCallback((interviewId: string) => {
-    setScheduledInterviews((prev) =>
-      prev.filter((interview) => interview.id !== interviewId)
-    )
+  const handleCancelInterview = useCallback(async (interviewId: number) => {
+    try {
+      await apiService.cancelInterview(interviewId)
+      // Reload scheduled interviews to get updated status
+      const interviewsData = await apiService.getAllScheduledInterviews()
+      // Filter out cancelled interviews for HR dashboard
+      const activeInterviews = interviewsData.filter((interview: any) => {
+        const statusUpper = (interview.status || '').toUpperCase()
+        return statusUpper === 'SCHEDULED'
+      })
+      const formattedInterviews: ScheduledInterview[] = activeInterviews.map((interview: any) => ({
+        id: interview.id,
+        candidateName: interview.candidateName,
+        candidateEmail: interview.candidateEmail,
+        panelName: interview.panelName,
+        panelEmail: interview.panelEmail,
+        level: interview.level,
+        date: interview.scheduledDate,
+        startTime: interview.startTime,
+        endTime: interview.endTime,
+        skills: interview.skills || [],
+        status: interview.status || 'SCHEDULED',
+      }))
+      setScheduledInterviews(formattedInterviews)
+    } catch (err: any) {
+      setError('Failed to cancel interview: ' + (err.message || 'Unknown error'))
+    }
   }, [])
 
   // Memoize selected skill names
   const selectedSkillNames = useMemo(
     () =>
       selectedSkills
-        .map((id) => availableSkills.find((s) => s.id === id)?.name)
+        .map((id) => availableSkills.find((s) => s.id.toString() === id)?.name)
         .filter((name): name is string => Boolean(name)),
     [selectedSkills, availableSkills]
   )
@@ -346,35 +455,6 @@ export const HRDashboard: React.FC = () => {
                 <div style={styles.formRow}>
                   <div style={styles.formGroup}>
                     <label style={styles.label}>
-                      Candidate Name <span style={styles.required}>*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={candidateName}
-                      onChange={(e) => setCandidateName(e.target.value)}
-                      placeholder="Enter candidate name"
-                      style={styles.input}
-                      className="input-focus"
-                    />
-                  </div>
-                  <div style={styles.formGroup}>
-                    <label style={styles.label}>
-                      Candidate Email <span style={styles.required}>*</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={candidateEmail}
-                      onChange={(e) => setCandidateEmail(e.target.value)}
-                      placeholder="Enter candidate email"
-                      style={styles.input}
-                      className="input-focus"
-                    />
-                  </div>
-                </div>
-
-                <div style={styles.formRow}>
-                  <div style={styles.formGroup}>
-                    <label style={styles.label}>
                       Interview Level <span style={styles.required}>*</span>
                     </label>
                     <select
@@ -423,13 +503,13 @@ export const HRDashboard: React.FC = () => {
                             {filteredSkills.map((skill) => (
                               <div
                                 key={skill.id}
-                                onClick={() => toggleSkill(skill.id)}
+                                onClick={() => toggleSkill(skill.id.toString())}
                                 style={styles.skillDropdownItem}
                               >
                                 <input
                                   type="checkbox"
-                                  checked={selectedSkills.includes(skill.id)}
-                                  onChange={() => toggleSkill(skill.id)}
+                                  checked={selectedSkills.includes(skill.id.toString())}
+                                  onChange={() => toggleSkill(skill.id.toString())}
                                   style={styles.checkbox}
                                 />
                                 <span>{skill.name}</span>
@@ -509,7 +589,7 @@ export const HRDashboard: React.FC = () => {
                     <tbody>
                       {matchedPanels.map((panel, index) => (
                         <tr
-                          key={panel.id}
+                          key={panel.interviewerProfileId}
                           style={{
                             ...styles.tableRow,
                             animation: `fadeInUp 0.3s ease-out ${index * 0.1}s both`,
@@ -525,7 +605,6 @@ export const HRDashboard: React.FC = () => {
                           <td style={styles.tableCell}>
                             <div>
                               <div style={styles.panelName}>{panel.name}</div>
-                              <div style={styles.panelEmail}>{panel.email}</div>
                             </div>
                           </td>
                           <td style={styles.tableCell}>
@@ -545,11 +624,11 @@ export const HRDashboard: React.FC = () => {
                           </td>
                           <td style={styles.tableCell}>
                             <div style={styles.matchedSkills}>
-                              {panel.panelSkills.map((skill, idx) => (
+                              {panel.skills?.map((skill, idx) => (
                                 <span key={idx} style={styles.skillTag}>
-                                  {skill.name}
+                                  {skill}
                                 </span>
-                              ))}
+                              )) || []}
                             </div>
                           </td>
                           <td style={styles.tableCell}>
@@ -564,7 +643,7 @@ export const HRDashboard: React.FC = () => {
                           <td style={styles.tableCell}>
                             {panel.availabilitySlots.length === 1 ? (
                               <button
-                                onClick={() => handleBookInterview(panel.id, panel.availabilitySlots[0])}
+                                onClick={() => handleBookInterview(panel.interviewerProfileId, panel.availabilitySlots?.[0])}
                                 style={styles.bookButton}
                                 className="button-hover"
                               >
@@ -575,7 +654,7 @@ export const HRDashboard: React.FC = () => {
                                 {panel.availabilitySlots.map((slot, idx) => (
                                   <button
                                     key={idx}
-                                    onClick={() => handleBookInterview(panel.id, slot)}
+                                    onClick={() => handleBookInterview(panel.interviewerProfileId, slot)}
                                     style={styles.bookSlotButton}
                                     className="button-hover"
                                   >
@@ -591,6 +670,75 @@ export const HRDashboard: React.FC = () => {
                   </table>
                 </div>
               </section>
+            )}
+
+            {/* Booking Modal */}
+            {isBookingModalOpen && (
+              <div style={styles.modalOverlay} onClick={() => !isBooking && setIsBookingModalOpen(false)}>
+                <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+                  <div style={styles.modalHeader}>
+                    <h2 style={styles.modalTitle}>Book Interview</h2>
+                    {!isBooking && (
+                      <button
+                        onClick={() => setIsBookingModalOpen(false)}
+                        style={styles.modalCloseButton}
+                        aria-label="Close modal"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <div style={styles.modalBody}>
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>
+                        Candidate Name <span style={styles.required}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={bookingCandidateName}
+                        onChange={(e) => setBookingCandidateName(e.target.value)}
+                        placeholder="Enter candidate name"
+                        style={styles.input}
+                        className="input-focus"
+                        disabled={isBooking}
+                      />
+                    </div>
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>
+                        Candidate Email <span style={styles.required}>*</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={bookingCandidateEmail}
+                        onChange={(e) => setBookingCandidateEmail(e.target.value)}
+                        placeholder="Enter candidate email"
+                        style={styles.input}
+                        className="input-focus"
+                        disabled={isBooking}
+                      />
+                    </div>
+                  </div>
+                  <div style={styles.modalFooter}>
+                    {!isBooking && (
+                      <button
+                        onClick={() => setIsBookingModalOpen(false)}
+                        style={styles.modalCancelButton}
+                        className="button-hover"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    <button
+                      onClick={handleConfirmBooking}
+                      style={styles.modalConfirmButton}
+                      className="button-hover"
+                      disabled={isBooking || !bookingCandidateName || !bookingCandidateEmail}
+                    >
+                      {isBooking ? 'Booking...' : 'Confirm Booking'}
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Scheduled Interviews */}
@@ -1161,5 +1309,88 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '1.125rem',
     padding: '0.25rem',
     lineHeight: 1,
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  modalContent: {
+    backgroundColor: white,
+    borderRadius: '8px',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+    width: '90%',
+    maxWidth: '500px',
+    maxHeight: '90vh',
+    overflow: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  modalHeader: {
+    padding: '1.5rem',
+    borderBottom: `1px solid ${borderGray}`,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: '1.25rem',
+    fontWeight: '600',
+    color: textDark,
+    margin: 0,
+  },
+  modalCloseButton: {
+    backgroundColor: 'transparent',
+    border: 'none',
+    color: textLight,
+    cursor: 'pointer',
+    fontSize: '1.5rem',
+    padding: '0.25rem',
+    lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBody: {
+    padding: '1.5rem',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem',
+  },
+  modalFooter: {
+    padding: '1.5rem',
+    borderTop: `1px solid ${borderGray}`,
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '0.75rem',
+  },
+  modalCancelButton: {
+    padding: '0.75rem 1.5rem',
+    backgroundColor: 'transparent',
+    color: textDark,
+    border: `1px solid ${borderGray}`,
+    borderRadius: '4px',
+    fontSize: '0.875rem',
+    fontWeight: '500',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s, border-color 0.2s',
+  },
+  modalConfirmButton: {
+    padding: '0.75rem 1.5rem',
+    backgroundColor: primaryPurple,
+    color: white,
+    border: 'none',
+    borderRadius: '4px',
+    fontSize: '0.875rem',
+    fontWeight: '500',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s, transform 0.1s',
   },
 }

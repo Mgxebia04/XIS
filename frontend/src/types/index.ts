@@ -1,16 +1,25 @@
-// AIModified:2026-01-11T06:08:23Z
+// AIModified:2026-01-11T09:56:34Z
 export type UserRole = 'HR' | 'PANEL'
+export type BackendRole = 'HR Manager' | 'Interviewer'
 
 export interface User {
   id: string
   email: string
   name: string
   role: UserRole
+  interviewerProfileId?: number
 }
 
 export interface LoginCredentials {
   email: string
   password: string
+}
+
+export interface BackendLoginResponse {
+  token: string
+  email: string
+  role: BackendRole
+  interviewerProfileId?: number
 }
 
 export interface AuthResponse {
@@ -22,56 +31,88 @@ export interface AuthResponse {
 export type SkillType = 'PRIMARY' | 'SECONDARY'
 
 export interface Skill {
-  id: string
+  id: number
   name: string
-  type: SkillType
+  type?: SkillType // Optional, used for display purposes
 }
 
 export interface AvailabilitySlot {
-  id: string
+  id: number
   date: string // ISO date string
-  startTime: string // HH:mm format
-  endTime: string // HH:mm format
+  startTime: string // HH:mm format (from TimeSpan)
+  endTime: string // HH:mm format (from TimeSpan)
+  isAvailable?: boolean
 }
 
 export interface Interview {
-  id: string
-  candidateName: string
-  candidateEmail: string
-  date: string // ISO date string
-  startTime: string // HH:mm format
-  endTime: string // HH:mm format
-  skills: string[] // Skill names
-  status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED'
-  hrName?: string // HR who scheduled the interview
-  hrEmail?: string // HR email
+  id: number
+  interviewerProfileId: number
+  intervieweeId: number
+  interviewTypeId: number
+  scheduledDate: string // ISO date string
+  startTime: string // HH:mm format (from TimeSpan)
+  endTime: string // HH:mm format (from TimeSpan)
+  status: string
+  candidateName?: string // From Interviewee
+  candidateEmail?: string // From Interviewee
+  interviewType?: string // From InterviewType
+  skills?: string[] // Skill names from InterviewRequirements
 }
 
 // HR Dashboard Types
-export type InterviewLevel = 'L1' | 'L2'
+export type InterviewLevel = 'L1' | 'L2' | 'L3'
 
-export interface MatchedPanel {
-  id: string
+export interface InterviewType {
+  id: number
+  name: string
+  description?: string
+}
+
+export interface Interviewee {
+  id: number
   name: string
   email: string
-  matchPercentage: number // 0-100
-  matchedSkills: string[] // Skill names that match
-  panelSkills: Skill[] // All skills of the panel member
-  availabilitySlots: AvailabilitySlot[] // Available time slots
+  primarySkill?: string
+}
+
+export interface AvailableTimeSlot {
+  date: string // ISO date string
+  startTime: string // HH:mm format
+  endTime: string // HH:mm format
+}
+
+export interface MatchedPanel {
+  interviewerProfileId: number
+  name: string
+  profilePictureUrl?: string
+  level?: string
+  skills: string[] // Skill names
+  availableTimeSlots: AvailableTimeSlot[] // Time slots with date and time
+  matchPercentage?: number // Calculated on frontend
+  matchedSkills?: string[] // Calculated on frontend
 }
 
 export interface ScheduledInterview {
-  id: string
+  id: number
   candidateName: string
   candidateEmail: string
   panelName: string
-  panelEmail: string
-  level: InterviewLevel
+  panelEmail?: string
+  level: string
   date: string // ISO date string
   startTime: string // HH:mm format
   endTime: string // HH:mm format
   skills: string[] // Skill names
-  status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED'
-  hrName?: string // HR who scheduled the interview
-  hrEmail?: string // HR email
+  status: string
+}
+
+export interface InterviewScheduleDto {
+  interviewerProfileId: number
+  intervieweeId: number
+  interviewTypeId: number
+  scheduledDate: string
+  startTime: string
+  endTime: string
+  primarySkillIds: number[]
+  secondarySkillIds: number[]
 }

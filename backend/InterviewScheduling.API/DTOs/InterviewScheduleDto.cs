@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T05:42:58Z
+// AIModified:2026-01-11T11:35:36Z
 namespace InterviewScheduling.API.DTOs;
 
 public class InterviewScheduleDto
@@ -20,7 +20,14 @@ public class AvailableInterviewerDto
     public string? ProfilePictureUrl { get; set; }
     public string? Level { get; set; }
     public List<string> Skills { get; set; } = new();
-    public List<TimeSpan> AvailableTimeSlots { get; set; } = new();
+    public List<AvailableTimeSlotDto> AvailableTimeSlots { get; set; } = new();
+}
+
+public class AvailableTimeSlotDto
+{
+    public DateTime Date { get; set; }
+    public TimeSpan StartTime { get; set; }
+    public TimeSpan EndTime { get; set; }
 }
 
 public class InterviewSearchDto

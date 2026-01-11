@@ -13,6 +13,8 @@ BEGIN
         Email NVARCHAR(255) NOT NULL UNIQUE,
         PasswordHash NVARCHAR(500) NOT NULL,
         Role NVARCHAR(50) NOT NULL,
+        Name NVARCHAR(255) NULL,
+        ProfilePictureUrl NVARCHAR(500) NULL,
         CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
         UpdatedAt DATETIME2 NULL
     );
@@ -52,8 +54,6 @@ BEGIN
     CREATE TABLE InterviewerProfiles (
         Id INT PRIMARY KEY IDENTITY(1,1),
         UserId INT NOT NULL UNIQUE,
-        Name NVARCHAR(255) NULL,
-        ProfilePictureUrl NVARCHAR(500) NULL,
         Experience NVARCHAR(50) NULL,
         Level NVARCHAR(50) NULL,
         CreatedAt DATETIME2 NOT NULL DEFAULT GETUTCDATE(),

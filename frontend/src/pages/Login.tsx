@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T06:08:23Z
+// AIModified:2026-01-11T10:09:38Z
 import React, { useState, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
@@ -15,7 +15,7 @@ export const Login: React.FC = () => {
   // Redirect if already authenticated
   React.useEffect(() => {
     if (isAuthenticated) {
-      // Will be handled by Dashboard component based on role
+      // Dashboard component will handle role-based redirection
       navigate('/dashboard', { replace: true })
     }
   }, [isAuthenticated, navigate])
@@ -28,30 +28,13 @@ export const Login: React.FC = () => {
     try {
       const credentials: LoginCredentials = { email, password }
       await login(credentials)
-      // Will be handled by Dashboard component based on role
+      // After successful login, redirect to dashboard which will route based on role from backend
       navigate('/dashboard', { replace: true })
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed. Please try again.')
+      setError(err.response?.data?.message || 'Login failed. Please check your credentials and try again.')
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const handleDemoLogin = (role: 'HR' | 'PANEL') => {
-    // Demo login for local testing
-    const demoUser = {
-      id: 'demo-1',
-      email: `demo-${role.toLowerCase()}@example.com`,
-      name: `Demo ${role} User`,
-      role: role,
-    }
-    const demoToken = 'demo-token-' + Date.now()
-    
-    localStorage.setItem('authToken', demoToken)
-    localStorage.setItem('user', JSON.stringify(demoUser))
-    
-    // Reload to trigger auth context update
-    window.location.href = role === 'PANEL' ? '/panel-dashboard' : '/hr-dashboard'
   }
 
   return (
@@ -67,7 +50,15 @@ export const Login: React.FC = () => {
           <form onSubmit={handleSubmit} style={styles.form}>
             {error && (
               <div style={styles.error} className="fade-in">
-                {error}
+                <span style={styles.errorIcon}>⚠️</span>
+                <span style={styles.errorText}>{error}</span>
+                <button
+                  onClick={() => setError(null)}
+                  style={styles.errorClose}
+                  aria-label="Close error"
+                >
+                  ✕
+                </button>
               </div>
             )}
             <div style={styles.inputGroup}>
@@ -109,25 +100,6 @@ export const Login: React.FC = () => {
               {isLoading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
-          <div style={styles.demoSection}>
-            <p style={styles.demoLabel}>Demo Access (Local Testing):</p>
-            <div style={styles.demoButtons}>
-              <button
-                onClick={() => handleDemoLogin('PANEL')}
-                style={styles.demoButton}
-                className="button-hover"
-              >
-                Panel Dashboard
-              </button>
-              <button
-                onClick={() => handleDemoLogin('HR')}
-                style={styles.demoButton}
-                className="button-hover"
-              >
-                HR Dashboard
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -244,32 +216,30 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.875rem',
     border: '1px solid #fcc',
     animation: 'shake 0.3s ease-in-out',
-  },
-  demoSection: {
-    marginTop: '1.5rem',
-    paddingTop: '1.5rem',
-    borderTop: `1px solid ${borderGray}`,
-  },
-  demoLabel: {
-    fontSize: '0.875rem',
-    color: textLight,
-    marginBottom: '0.75rem',
-    textAlign: 'center',
-  },
-  demoButtons: {
     display: 'flex',
+    alignItems: 'center',
     gap: '0.5rem',
   },
-  demoButton: {
+  errorIcon: {
+    fontSize: '1rem',
+    flexShrink: 0,
+  },
+  errorText: {
     flex: 1,
-    padding: '0.75rem',
-    backgroundColor: primaryPurple,
-    color: white,
+  },
+  errorClose: {
+    marginLeft: 'auto',
+    background: 'none',
     border: 'none',
-    borderRadius: '4px',
-    fontSize: '0.875rem',
-    fontWeight: '500',
+    color: '#dc3545',
     cursor: 'pointer',
-    transition: 'background-color 0.2s, transform 0.1s',
+    fontSize: '1.25rem',
+    padding: '0',
+    width: '1.5rem',
+    height: '1.5rem',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
 }

@@ -1,5 +1,6 @@
-// AIModified:2026-01-11T05:42:58Z
+// AIModified:2026-01-11T10:33:15Z
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using InterviewScheduling.API.Data;
 using InterviewScheduling.API.DTOs;
@@ -21,22 +22,25 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
+    [AllowAnonymous]
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
     {
+        // Look up user by email only - role is determined from the user table
         var user = await _context.Users
             .Include(u => u.InterviewerProfile)
-            .FirstOrDefaultAsync(u => u.Email == request.Email && u.Role == request.Role);
+            .FirstOrDefaultAsync(u => u.Email == request.Email);
 
         if (user == null)
         {
-            return Unauthorized(new { message = "Invalid email or role" });
+            return Unauthorized(new { message = "Invalid email or password" });
         }
 
         // In production, verify password hash
         // For now, we'll accept any password for seeded users
         // var isValidPassword = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
-        // if (!isValidPassword) return Unauthorized();
+        // if (!isValidPassword) return Unauthorized(new { message = "Invalid email or password" });
 
+        // Role is determined from the user table, not from the request
         var response = new LoginResponse
         {
             Email = user.Email,

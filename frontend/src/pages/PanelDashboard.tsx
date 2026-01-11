@@ -1,6 +1,8 @@
+// AIModified:2026-01-11T12:35:29Z
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import { apiService } from '@/services/api'
 import type { Skill, AvailabilitySlot, Interview } from '@/types'
 import { formatDate, getMinDateTime, isFutureDateTime } from '@/utils/dateUtils'
 
@@ -8,25 +10,12 @@ export const PanelDashboard: React.FC = () => {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  // All available skills (from API/master list)
-  const [allAvailableSkills] = useState<Skill[]>([
-    { id: '1', name: 'React', type: 'PRIMARY' },
-    { id: '2', name: 'TypeScript', type: 'PRIMARY' },
-    { id: '3', name: 'Node.js', type: 'PRIMARY' },
-    { id: '4', name: 'Python', type: 'SECONDARY' },
-    { id: '5', name: 'Java', type: 'SECONDARY' },
-    { id: '6', name: 'AWS', type: 'SECONDARY' },
-    { id: '7', name: 'Docker', type: 'PRIMARY' },
-    { id: '8', name: 'Kubernetes', type: 'SECONDARY' },
-    { id: '9', name: 'MongoDB', type: 'SECONDARY' },
-    { id: '10', name: 'PostgreSQL', type: 'SECONDARY' },
-  ])
-
+  // All available skills (from API)
+  const [allAvailableSkills, setAllAvailableSkills] = useState<Skill[]>([])
   // Skills selected by the panel member
-  const [mySkills, setMySkills] = useState<Skill[]>([
-    { id: '1', name: 'React', type: 'PRIMARY' },
-    { id: '2', name: 'TypeScript', type: 'PRIMARY' },
-  ])
+  const [mySkills, setMySkills] = useState<Skill[]>([])
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const [isAddSkillDropdownOpen, setIsAddSkillDropdownOpen] = useState(false)
   const [skillSearchQuery, setSkillSearchQuery] = useState('')
@@ -51,51 +40,22 @@ export const PanelDashboard: React.FC = () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [isAddSkillDropdownOpen])
-  const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([
-    { id: '1', date: '2024-01-15', startTime: '09:00', endTime: '10:00' },
-    { id: '2', date: '2024-01-15', startTime: '14:00', endTime: '15:00' },
-  ])
-  const [upcomingInterviews, setUpcomingInterviews] = useState<Interview[]>([
-    {
-      id: '1',
-      candidateName: 'John Doe',
-      candidateEmail: 'john.doe@example.com',
-      date: '2024-01-16',
-      startTime: '10:00',
-      endTime: '11:00',
-      skills: ['React', 'TypeScript'],
-      status: 'SCHEDULED',
-      hrName: 'Sarah Johnson',
-      hrEmail: 'sarah.johnson@example.com',
-    },
-    {
-      id: '2',
-      candidateName: 'Jane Smith',
-      candidateEmail: 'jane.smith@example.com',
-      date: '2024-01-17',
-      startTime: '14:00',
-      endTime: '15:00',
-      skills: ['Node.js', 'TypeScript'],
-      status: 'SCHEDULED',
-      hrName: 'Mike Williams',
-      hrEmail: 'mike.williams@example.com',
-    },
-  ])
-  const [pastInterviews, setPastInterviews] = useState<Interview[]>([
-    {
-      id: '3',
-      candidateName: 'Bob Johnson',
-      candidateEmail: 'bob.johnson@example.com',
-      date: '2024-01-10',
-      startTime: '10:00',
-      endTime: '11:00',
-      skills: ['React'],
-      status: 'COMPLETED',
-      hrName: 'Sarah Johnson',
-      hrEmail: 'sarah.johnson@example.com',
-    },
-  ])
+  const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([])
+  const [upcomingInterviews, setUpcomingInterviews] = useState<Interview[]>([])
+  const [pastInterviews, setPastInterviews] = useState<Interview[]>([])
+  const [isLoadingData, setIsLoadingData] = useState(true)
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming')
+
+  // Cancel confirmation modal state
+  const [cancelConfirmModal, setCancelConfirmModal] = useState<{
+    isOpen: boolean
+    interviewId: number | null
+    candidateName: string
+  }>({
+    isOpen: false,
+    interviewId: null,
+    candidateName: '',
+  })
 
   // New availability slot form state
   const [newSlot, setNewSlot] = useState({
@@ -106,6 +66,106 @@ export const PanelDashboard: React.FC = () => {
 
   // Memoize min date/time to avoid recalculation on every render
   const minDateTime = useMemo(() => getMinDateTime(), [])
+
+  // Load profile and data on mount
+  useEffect(() => {
+    const loadData = async () => {
+      if (!user?.interviewerProfileId) {
+        setError('Interviewer profile not found')
+        setIsLoadingProfile(false)
+        setIsLoadingData(false)
+        return
+      }
+
+      try {
+        setIsLoadingProfile(true)
+        setIsLoadingData(true)
+        
+        // Load all skills, profile, availability, and interviews in parallel
+        const [skillsData, profileData, availabilityData, interviewsData] = await Promise.all([
+          apiService.getSkills(),
+          apiService.getInterviewerProfile(user.interviewerProfileId),
+          apiService.getAvailability(user.interviewerProfileId),
+          apiService.getInterviewerSchedule(user.interviewerProfileId),
+        ])
+
+        setAllAvailableSkills(skillsData)
+        
+        // Set my skills from profile
+        const primarySkills = profileData.primarySkills.map(s => ({ ...s, type: 'PRIMARY' as const }))
+        const secondarySkills = profileData.secondarySkills.map(s => ({ ...s, type: 'SECONDARY' as const }))
+        setMySkills([...primarySkills, ...secondarySkills])
+
+        setAvailabilitySlots(availabilityData)
+
+        // Separate upcoming and past interviews based on scheduled date and time
+        const now = new Date()
+        now.setSeconds(0, 0)
+        now.setMilliseconds(0)
+        
+        const upcoming = interviewsData.filter(i => {
+          if (!i.scheduledDate || !i.startTime) return false
+          
+          try {
+            // Create date-time from scheduledDate (YYYY-MM-DD) and startTime (HH:mm)
+            const [year, month, day] = i.scheduledDate.split('-').map(Number)
+            const [hours, minutes] = i.startTime.split(':').map(Number)
+            
+            if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hours) || isNaN(minutes)) {
+              return false
+            }
+            
+            const interviewDateTime = new Date(year, month - 1, day, hours, minutes, 0, 0)
+            
+            // Upcoming: interview is in the future AND status is "Scheduled" (not completed/cancelled)
+            const isFuture = interviewDateTime >= now
+            // Only include interviews with status "Scheduled" (case-insensitive check)
+            const isActive = i.status?.toUpperCase() === 'SCHEDULED'
+            return isFuture && isActive
+          } catch (error) {
+            console.error('Error processing interview:', i, error)
+            return false
+          }
+        })
+        
+        const past = interviewsData.filter(i => {
+          if (!i.scheduledDate || !i.startTime) return false
+          
+          try {
+            // Create date-time from scheduledDate (YYYY-MM-DD) and startTime (HH:mm)
+            const [year, month, day] = i.scheduledDate.split('-').map(Number)
+            const [hours, minutes] = i.startTime.split(':').map(Number)
+            
+            if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hours) || isNaN(minutes)) {
+              return false
+            }
+            
+            const interviewDateTime = new Date(year, month - 1, day, hours, minutes, 0, 0)
+            
+            // History: interview is in the past OR completed/cancelled
+            const isPast = interviewDateTime < now
+            // Check for completed or cancelled status (case-insensitive)
+            const statusUpper = i.status?.toUpperCase() || ''
+            const isCompletedOrCancelled = statusUpper === 'COMPLETED' || statusUpper === 'CANCELLED'
+            return isPast || isCompletedOrCancelled
+          } catch (error) {
+            console.error('Error processing interview:', i, error)
+            return false
+          }
+        })
+        
+        setUpcomingInterviews(upcoming)
+        setPastInterviews(past)
+      } catch (err: any) {
+        setError('Failed to load data: ' + (err.message || 'Unknown error'))
+      } finally {
+        setIsLoadingProfile(false)
+        setIsLoadingData(false)
+      }
+    }
+
+    loadData()
+  }, [user?.interviewerProfileId])
 
   // Memoize available skills to add based on search query
   const availableSkillsToAdd = useMemo(() => {
@@ -127,60 +187,213 @@ export const PanelDashboard: React.FC = () => {
     navigate('/login', { replace: true })
   }, [logout, navigate])
 
+  const saveProfile = useCallback(async (updatedSkills: Skill[]) => {
+    if (!user?.interviewerProfileId) return
+
+    try {
+      const primarySkills = updatedSkills.filter(s => s.type === 'PRIMARY').map(s => ({ id: s.id, name: s.name }))
+      const secondarySkills = updatedSkills.filter(s => s.type === 'SECONDARY').map(s => ({ id: s.id, name: s.name }))
+      
+      await apiService.updateInterviewerProfile(user.interviewerProfileId, {
+        primarySkills,
+        secondarySkills,
+      })
+    } catch (err: any) {
+      setError('Failed to save profile: ' + (err.message || 'Unknown error'))
+      throw err // Re-throw to allow caller to handle
+    }
+  }, [user?.interviewerProfileId])
+
   const handleAddSkill = useCallback(
-    (skill: Skill) => {
+    async (skill: Skill) => {
       // Add skill to mySkills if not already present
       if (!mySkills.find((s) => s.id === skill.id)) {
-        setMySkills((prev) => [...prev, { ...skill, type: 'PRIMARY' }])
+        const updatedSkills = [...mySkills, { ...skill, type: 'PRIMARY' as const }]
+        setMySkills(updatedSkills)
+        setIsAddSkillDropdownOpen(false)
+        setSkillSearchQuery('')
+        // Save to backend
+        try {
+          await saveProfile(updatedSkills)
+        } catch {
+          // Error already handled in saveProfile
+          setMySkills(mySkills) // Revert on error
+        }
       }
-      setIsAddSkillDropdownOpen(false)
-      setSkillSearchQuery('')
     },
-    [mySkills]
+    [mySkills, saveProfile]
   )
 
-  const handleDeleteSkill = useCallback((skillId: string) => {
-    setMySkills((prev) => prev.filter((skill) => skill.id !== skillId))
-  }, [])
+  const handleDeleteSkill = useCallback(async (skillId: number | string) => {
+    const updatedSkills = mySkills.filter((skill) => skill.id !== skillId)
+    const previousSkills = mySkills
+    setMySkills(updatedSkills)
+    // Save to backend
+    try {
+      await saveProfile(updatedSkills)
+    } catch {
+      // Error already handled in saveProfile
+      setMySkills(previousSkills) // Revert on error
+    }
+  }, [mySkills, saveProfile])
 
-  const handleToggleSkillType = useCallback((skillId: string) => {
-    setMySkills((prev) =>
-      prev.map((skill) =>
-        skill.id === skillId
-          ? { ...skill, type: skill.type === 'PRIMARY' ? 'SECONDARY' : 'PRIMARY' }
-          : skill
-      )
+  const handleToggleSkillType = useCallback(async (skillId: number | string) => {
+    const updatedSkills = mySkills.map((skill) =>
+      skill.id === skillId
+        ? { ...skill, type: skill.type === 'PRIMARY' ? 'SECONDARY' as const : 'PRIMARY' as const }
+        : skill
     )
-  }, [])
+    const previousSkills = mySkills
+    setMySkills(updatedSkills)
+    // Save to backend
+    try {
+      await saveProfile(updatedSkills)
+    } catch {
+      // Error already handled in saveProfile
+      setMySkills(previousSkills) // Revert on error
+    }
+  }, [mySkills, saveProfile])
 
-  const handleAddAvailabilitySlot = useCallback(() => {
+  const handleAddAvailabilitySlot = useCallback(async () => {
+    if (!user?.interviewerProfileId) {
+      setError('Interviewer profile not found')
+      return
+    }
+
     if (newSlot.date && newSlot.startTime && newSlot.endTime) {
       if (isFutureDateTime(newSlot.date, newSlot.startTime)) {
-        const slot: AvailabilitySlot = {
-          id: Date.now().toString(),
-          date: newSlot.date,
-          startTime: newSlot.startTime,
-          endTime: newSlot.endTime,
+        try {
+          const slot = await apiService.createAvailability(user.interviewerProfileId, {
+            date: newSlot.date,
+            startTime: newSlot.startTime,
+            endTime: newSlot.endTime,
+          })
+          setAvailabilitySlots((prev) => [...prev, slot])
+          setNewSlot({ date: '', startTime: '', endTime: '' })
+        } catch (err: any) {
+          setError('Failed to add availability slot: ' + (err.message || 'Unknown error'))
         }
-        setAvailabilitySlots((prev) => [...prev, slot])
-        setNewSlot({ date: '', startTime: '', endTime: '' })
+      } else {
+        setError('Please select a future date and time')
       }
     }
-  }, [newSlot])
+  }, [newSlot, user?.interviewerProfileId])
 
-  const handleRemoveAvailabilitySlot = useCallback((id: string) => {
-    setAvailabilitySlots((prev) => prev.filter((slot) => slot.id !== id))
+  const handleRemoveAvailabilitySlot = useCallback(async (id: number) => {
+    try {
+      await apiService.deleteAvailability(id)
+      setAvailabilitySlots((prev) => prev.filter((slot) => slot.id !== id))
+    } catch (err: any) {
+      setError('Failed to remove availability slot: ' + (err.message || 'Unknown error'))
+    }
   }, [])
 
-  const handleCancelInterview = useCallback((id: string) => {
-    setUpcomingInterviews((prev) =>
-      prev.filter((interview) => interview.id !== id)
-    )
-    // API call would go here
+  const handleCancelInterview = useCallback((id: number, candidateName: string) => {
+    setCancelConfirmModal({
+      isOpen: true,
+      interviewId: id,
+      candidateName,
+    })
+  }, [])
+
+  const handleConfirmCancel = useCallback(async (interviewId?: number) => {
+    // Use the passed interviewId or fall back to modal state
+    const idToCancel = interviewId ?? cancelConfirmModal.interviewId
+    if (!idToCancel) {
+      console.error('No interview ID provided or in cancel modal', { interviewId, cancelConfirmModal })
+      return
+    }
+
+    console.log('Attempting to cancel interview:', idToCancel)
+    
+    // Close modal immediately to prevent UI freeze
+    setCancelConfirmModal({ isOpen: false, interviewId: null, candidateName: '' })
+
+    try {
+      console.log('Calling cancelInterview API for interview:', idToCancel)
+      await apiService.cancelInterview(idToCancel)
+      console.log('Interview cancelled successfully')
+      
+      // Reload interviews to get updated status
+      if (user?.interviewerProfileId) {
+        console.log('Reloading interviews for profile:', user.interviewerProfileId)
+        const interviewsData = await apiService.getInterviewerSchedule(user.interviewerProfileId)
+        const now = new Date()
+        now.setSeconds(0, 0)
+        now.setMilliseconds(0)
+        
+        const upcoming = interviewsData.filter(i => {
+          if (!i.scheduledDate || !i.startTime) return false
+          try {
+            const [year, month, day] = i.scheduledDate.split('-').map(Number)
+            const [hours, minutes] = i.startTime.split(':').map(Number)
+            if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hours) || isNaN(minutes)) {
+              return false
+            }
+            const interviewDateTime = new Date(year, month - 1, day, hours, minutes, 0, 0)
+            const isFuture = interviewDateTime >= now
+            const isActive = i.status?.toUpperCase() === 'SCHEDULED'
+            return isFuture && isActive
+          } catch (error) {
+            return false
+          }
+        })
+        
+        const past = interviewsData.filter(i => {
+          if (!i.scheduledDate || !i.startTime) return false
+          try {
+            const [year, month, day] = i.scheduledDate.split('-').map(Number)
+            const [hours, minutes] = i.startTime.split(':').map(Number)
+            if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hours) || isNaN(minutes)) {
+              return false
+            }
+            const interviewDateTime = new Date(year, month - 1, day, hours, minutes, 0, 0)
+            const isPast = interviewDateTime < now
+            const statusUpper = i.status?.toUpperCase() || ''
+            const isCompletedOrCancelled = statusUpper === 'COMPLETED' || statusUpper === 'CANCELLED'
+            return isPast || isCompletedOrCancelled
+          } catch (error) {
+            return false
+          }
+        })
+        
+        setUpcomingInterviews(upcoming)
+        setPastInterviews(past)
+        console.log('Interviews reloaded. Upcoming:', upcoming.length, 'Past:', past.length)
+      }
+    } catch (err: any) {
+      console.error('Error cancelling interview:', err)
+      console.error('Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+      })
+      const errorMessage = err.response?.data?.message || err.message || 'Unknown error'
+      setError('Failed to cancel interview: ' + errorMessage)
+    }
+  }, [user?.interviewerProfileId])
+
+  const handleCancelCancel = useCallback(() => {
+    setCancelConfirmModal({ isOpen: false, interviewId: null, candidateName: '' })
   }, [])
 
   return (
     <div style={styles.container}>
+      {/* Error notification */}
+      {error && (
+        <div style={styles.errorBanner} className="fade-in">
+          <span style={styles.errorIcon}>⚠️</span>
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            style={styles.errorClose}
+            aria-label="Close error"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {/* Header */}
       <header style={styles.header}>
         <div style={styles.headerLeft}>
@@ -495,9 +708,6 @@ export const PanelDashboard: React.FC = () => {
                               </h3>
                               <p style={styles.interviewEmail}>{interview.candidateEmail}</p>
                             </div>
-                            {activeTab === 'upcoming' && (
-                              <span style={styles.interviewStatusBadge}>Upcoming</span>
-                            )}
                             {activeTab === 'history' && (
                               <span style={{
                                 ...styles.interviewStatusBadge,
@@ -513,7 +723,7 @@ export const PanelDashboard: React.FC = () => {
                             <div style={styles.interviewDetailItem}>
                               <span style={styles.detailIcon}>📅</span>
                               <span style={styles.interviewDate}>
-                                {formatDate(interview.date)}
+                                {formatDate(interview.scheduledDate)}
                               </span>
                             </div>
                             <div style={styles.interviewDetailItem}>
@@ -545,7 +755,7 @@ export const PanelDashboard: React.FC = () => {
                         </div>
                         {activeTab === 'upcoming' && (
                           <button
-                            onClick={() => handleCancelInterview(interview.id)}
+                            onClick={() => handleCancelInterview(interview.id, interview.candidateName || '')}
                             style={styles.cancelButton}
                             className="button-hover"
                           >
@@ -575,6 +785,66 @@ export const PanelDashboard: React.FC = () => {
           </div>
         </main>
       </div>
+
+      {/* Cancel Confirmation Modal */}
+      {cancelConfirmModal.isOpen && (
+        <div style={styles.modalOverlay} onClick={handleCancelCancel}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.modalTitle}>Cancel Interview</h2>
+              <button
+                onClick={handleCancelCancel}
+                style={styles.modalCloseButton}
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+            </div>
+            <div style={styles.modalBody}>
+              <p style={styles.modalMessage}>
+                Are you sure you want to cancel the interview with{' '}
+                <strong>{cancelConfirmModal.candidateName}</strong>?
+              </p>
+              <p style={styles.modalSubMessage}>
+                This action cannot be undone.
+              </p>
+            </div>
+            <div style={styles.modalFooter}>
+              <button
+                onClick={handleCancelCancel}
+                style={styles.modalCancelButton}
+                className="button-hover"
+                type="button"
+              >
+                No, Keep It
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  const interviewId = cancelConfirmModal.interviewId
+                  console.log('Yes, Cancel Interview button clicked', {
+                    interviewId,
+                    candidateName: cancelConfirmModal.candidateName,
+                    isOpen: cancelConfirmModal.isOpen
+                  })
+                  // Pass interviewId directly to avoid closure issues
+                  if (interviewId) {
+                    handleConfirmCancel(interviewId)
+                  } else {
+                    console.error('No interview ID available when button clicked')
+                  }
+                }}
+                style={styles.modalConfirmButton}
+                className="button-hover"
+                type="button"
+              >
+                Yes, Cancel Interview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1283,5 +1553,129 @@ const styles: { [key: string]: React.CSSProperties } = {
   hrEmail: {
     fontSize: '0.75rem',
     color: textLight,
+  },
+  errorBanner: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 100,
+    backgroundColor: '#fee',
+    color: '#dc3545',
+    padding: '0.75rem 1rem',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    borderBottom: '1px solid #fcc',
+    fontSize: '0.875rem',
+  },
+  errorIcon: {
+    fontSize: '1rem',
+  },
+  errorClose: {
+    marginLeft: 'auto',
+    background: 'none',
+    border: 'none',
+    color: '#dc3545',
+    cursor: 'pointer',
+    fontSize: '1.25rem',
+    padding: '0',
+    width: '1.5rem',
+    height: '1.5rem',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  modalContent: {
+    backgroundColor: white,
+    borderRadius: '8px',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+    width: '90%',
+    maxWidth: '500px',
+    maxHeight: '90vh',
+    overflow: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  modalHeader: {
+    padding: '1.5rem',
+    borderBottom: `1px solid ${borderGray}`,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: '1.25rem',
+    fontWeight: '600',
+    color: textDark,
+    margin: 0,
+  },
+  modalCloseButton: {
+    backgroundColor: 'transparent',
+    border: 'none',
+    color: textLight,
+    cursor: 'pointer',
+    fontSize: '1.5rem',
+    padding: '0.25rem',
+    lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBody: {
+    padding: '1.5rem',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem',
+  },
+  modalMessage: {
+    fontSize: '1rem',
+    color: textDark,
+    margin: 0,
+    lineHeight: 1.5,
+  },
+  modalSubMessage: {
+    fontSize: '0.875rem',
+    color: textLight,
+    margin: 0,
+  },
+  modalFooter: {
+    padding: '1.5rem',
+    borderTop: `1px solid ${borderGray}`,
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '0.75rem',
+  },
+  modalCancelButton: {
+    padding: '0.75rem 1.5rem',
+    backgroundColor: 'transparent',
+    color: textDark,
+    border: `1px solid ${borderGray}`,
+    borderRadius: '4px',
+    fontSize: '0.875rem',
+    fontWeight: '500',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s, border-color 0.2s',
+  },
+  modalConfirmButton: {
+    padding: '0.75rem 1.5rem',
+    backgroundColor: '#dc3545',
+    color: white,
+    border: 'none',
+    borderRadius: '4px',
+    fontSize: '0.875rem',
+    fontWeight: '500',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
   },
 }

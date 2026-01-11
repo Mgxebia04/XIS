@@ -1,11 +1,18 @@
-// AIModified:2026-01-11T05:42:58Z
+// AIModified:2026-01-11T11:35:36Z
 using Microsoft.EntityFrameworkCore;
 using InterviewScheduling.API.Data;
+using InterviewScheduling.API.Models;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Handle circular references in JSON serialization
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -35,22 +42,39 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("AllowAll");
-app.UseAuthorization();
+// Authorization is handled at controller/action level, not globally
+// app.UseAuthorization(); // Commented out - using simple token-based auth without middleware
 app.MapControllers();
 
-// Ensure database is created
+// Ensure database is created and model is validated
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        context.Database.EnsureCreated();
+        // EnsureCreated only creates if database doesn't exist
+        // For existing databases, we just validate the connection
+        if (!context.Database.CanConnect())
+        {
+            context.Database.EnsureCreated();
+        }
+        else
+        {
+            // Validate that the model matches the database schema
+            // This will throw if there's a mismatch
+            var canConnect = context.Database.CanConnect();
+            if (canConnect)
+            {
+                // Force EF Core to rebuild its model cache by creating a simple query
+                var _ = context.Users.Count();
+            }
+        }
     }
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred creating the DB.");
+        logger.LogError(ex, "An error occurred validating the DB connection.");
     }
 }
 

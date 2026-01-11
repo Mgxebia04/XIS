@@ -1,4 +1,5 @@
-// AIModified:2026-01-11T05:42:58Z
+// AIModified:2026-01-11T12:46:28Z
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using InterviewScheduling.API.Data;
@@ -36,11 +37,46 @@ public class ScheduleController : ControllerBase
         return Ok(interviews);
     }
 
+    [HttpGet("all")]
+    [AllowAnonymous]
+    public async Task<ActionResult<List<ScheduledInterviewDto>>> GetAllScheduledInterviews()
+    {
+        // Load interviews with necessary includes, then project to DTO to avoid circular references
+        var interviews = await _context.Interviews
+            .Include(i => i.Interviewee)
+            .Include(i => i.InterviewerProfile)
+                .ThenInclude(p => p.User)
+            .Include(i => i.InterviewRequirements)
+                .ThenInclude(r => r.Skill)
+            .OrderBy(i => i.ScheduledDate)
+            .ThenBy(i => i.StartTime)
+            .ToListAsync();
+
+        // Project to DTO after loading to avoid circular references and reduce payload size
+        var result = interviews.Select(i => new ScheduledInterviewDto
+        {
+            Id = i.Id,
+            CandidateName = i.Interviewee.Name,
+            CandidateEmail = i.Interviewee.Email,
+            PanelName = i.InterviewerProfile.User.Name ?? "Unknown",
+            PanelEmail = i.InterviewerProfile.User.Email,
+            Level = i.InterviewerProfile.Level,
+            ScheduledDate = i.ScheduledDate,
+            StartTime = i.StartTime,
+            EndTime = i.EndTime,
+            Skills = i.InterviewRequirements.Select(r => r.Skill.Name).ToList(),
+            Status = i.Status
+        }).ToList();
+
+        return Ok(result);
+    }
+
     [HttpPost("search")]
     public async Task<ActionResult<List<AvailableInterviewerDto>>> SearchAvailableInterviewers(
         [FromBody] InterviewSearchDto searchDto)
     {
         var query = _context.InterviewerProfiles
+            .Include(p => p.User)
             .Include(p => p.InterviewerSkills)
                 .ThenInclude(s => s.Skill)
             .Include(p => p.AvailabilitySlots)
@@ -73,16 +109,21 @@ public class ScheduleController : ControllerBase
         var result = profiles.Select(p => new AvailableInterviewerDto
         {
             InterviewerProfileId = p.Id,
-            Name = p.Name ?? "Unknown",
-            ProfilePictureUrl = p.ProfilePictureUrl,
+            Name = p.User.Name ?? "Unknown",
+            ProfilePictureUrl = p.User.ProfilePictureUrl,
             Level = p.Level,
             Skills = p.InterviewerSkills.Select(s => s.Skill.Name).ToList(),
             AvailableTimeSlots = p.AvailabilitySlots
                 .Where(a => !searchDto.InterviewDate.HasValue || a.Date == searchDto.InterviewDate.Value.Date)
                 .Where(a => a.IsAvailable)
-                .Select(a => a.StartTime)
-                .Distinct()
-                .OrderBy(t => t)
+                .Select(a => new AvailableTimeSlotDto
+                {
+                    Date = a.Date,
+                    StartTime = a.StartTime,
+                    EndTime = a.EndTime
+                })
+                .OrderBy(a => a.Date)
+                .ThenBy(a => a.StartTime)
                 .ToList()
         }).ToList();
 
@@ -164,5 +205,44 @@ public class ScheduleController : ControllerBase
             .FirstOrDefaultAsync(i => i.Id == interview.Id);
 
         return CreatedAtAction(nameof(GetInterviewerSchedule), new { interviewerId = dto.InterviewerProfileId }, result);
+    }
+
+    [HttpPut("cancel/{interviewId}")]
+    [AllowAnonymous]
+    public async Task<ActionResult> CancelInterview(int interviewId)
+    {
+        var interview = await _context.Interviews
+            .FirstOrDefaultAsync(i => i.Id == interviewId);
+
+        if (interview == null)
+        {
+            return NotFound(new { message = "Interview not found" });
+        }
+
+        if (interview.Status == "Cancelled")
+        {
+            return BadRequest(new { message = "Interview is already cancelled" });
+        }
+
+        interview.Status = "Cancelled";
+        interview.UpdatedAt = DateTime.UtcNow;
+
+        // Mark the availability slot as available again
+        var availabilitySlot = await _context.AvailabilitySlots
+            .FirstOrDefaultAsync(a => a.InterviewerProfileId == interview.InterviewerProfileId
+                && a.Date == interview.ScheduledDate.Date
+                && a.StartTime <= interview.StartTime
+                && a.EndTime >= interview.EndTime
+                && !a.IsAvailable);
+
+        if (availabilitySlot != null)
+        {
+            availabilitySlot.IsAvailable = true;
+            availabilitySlot.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return NoContent();
     }
 }

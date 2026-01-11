@@ -24,6 +24,7 @@ public class InterviewerProfileController : ControllerBase
     public async Task<ActionResult<InterviewerProfileDto>> GetProfile(int id)
     {
         var profile = await _context.InterviewerProfiles
+            .Include(p => p.User)
             .Include(p => p.InterviewerSkills)
                 .ThenInclude(s => s.Skill)
             .FirstOrDefaultAsync(p => p.Id == id);
@@ -36,8 +37,8 @@ public class InterviewerProfileController : ControllerBase
         var dto = new InterviewerProfileDto
         {
             Id = profile.Id,
-            Name = profile.Name,
-            ProfilePictureUrl = profile.ProfilePictureUrl,
+            Name = profile.User.Name,
+            ProfilePictureUrl = profile.User.ProfilePictureUrl,
             Experience = profile.Experience,
             Level = profile.Level,
             PrimarySkills = profile.InterviewerSkills
@@ -57,6 +58,7 @@ public class InterviewerProfileController : ControllerBase
     public async Task<ActionResult> UpdateProfile(int id, [FromBody] InterviewerProfileDto dto)
     {
         var profile = await _context.InterviewerProfiles
+            .Include(p => p.User)
             .Include(p => p.InterviewerSkills)
             .FirstOrDefaultAsync(p => p.Id == id);
 
@@ -65,8 +67,12 @@ public class InterviewerProfileController : ControllerBase
             return NotFound();
         }
 
-        profile.Name = dto.Name;
-        profile.ProfilePictureUrl = dto.ProfilePictureUrl;
+        // Update User table with Name and ProfilePictureUrl
+        profile.User.Name = dto.Name;
+        profile.User.ProfilePictureUrl = dto.ProfilePictureUrl;
+        profile.User.UpdatedAt = DateTime.UtcNow;
+        
+        // Update InterviewerProfile with Experience and Level
         profile.Experience = dto.Experience;
         profile.Level = dto.Level;
         profile.UpdatedAt = DateTime.UtcNow;

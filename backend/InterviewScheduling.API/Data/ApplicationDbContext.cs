@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T05:42:58Z
+// AIModified:2026-01-11T11:13:42Z
 using Microsoft.EntityFrameworkCore;
 using InterviewScheduling.API.Models;
 
@@ -33,6 +33,8 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.Email).IsRequired().HasMaxLength(255);
             entity.Property(e => e.PasswordHash).IsRequired().HasMaxLength(500);
             entity.Property(e => e.Role).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Name).HasMaxLength(255);
+            entity.Property(e => e.ProfilePictureUrl).HasMaxLength(500);
         });
 
         // InterviewerProfile configuration
