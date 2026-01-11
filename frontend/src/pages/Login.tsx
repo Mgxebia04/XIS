@@ -41,7 +41,10 @@ export const Login: React.FC = () => {
     <div style={styles.container}>
       {/* Header matching dashboard theme */}
       <header style={styles.header}>
-        <span style={styles.headerTitle}>XIS - Interview Scheduler</span>
+        <span style={styles.headerTitle}>
+          <span style={styles.headerTitleX}>X</span>
+          <span style={styles.headerTitleText}> Interview Scheduler</span>
+        </span>
       </header>
       <div style={styles.content}>
         <div style={styles.card}>
@@ -107,7 +110,7 @@ export const Login: React.FC = () => {
 }
 
 // Color palette matching the exact design system
-const primaryPurple = '#5F256E'
+const primaryPurple = '#4a1e47'
 const white = '#FFFFFF'
 const textDark = '#333333'
 const textLight = '#666666'
@@ -138,6 +141,18 @@ const styles: { [key: string]: React.CSSProperties } = {
   headerTitle: {
     fontSize: '0.875rem',
     fontWeight: '500',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  headerTitleX: {
+    fontSize: '1.5rem',
+    fontWeight: '700',
+    letterSpacing: '-0.02em',
+  },
+  headerTitleText: {
+    fontSize: '0.875rem',
+    fontWeight: '500',
+    marginLeft: '0.25rem',
   },
   content: {
     flex: 1,

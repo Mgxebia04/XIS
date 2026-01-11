@@ -50,11 +50,12 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   button: {
     padding: '0.75rem 1.5rem',
-    backgroundColor: '#007bff',
+    backgroundColor: '#4a1e47',
     color: 'white',
     border: 'none',
     borderRadius: '4px',
     fontSize: '1rem',
     cursor: 'pointer',
+    transition: 'background-color 0.2s, transform 0.1s',
   },
 }
