@@ -405,6 +405,33 @@ export const HRDashboard: React.FC = () => {
     }
   }, [])
 
+  const handleRequestPanel = useCallback(async () => {
+    if (!panelRequestName || !panelRequestEmail) {
+      setError('Please fill in panel name and email')
+      return
+    }
+
+    setError(null)
+    setIsSubmittingRequest(true)
+
+    try {
+      await apiService.requestPanel({
+        panelName: panelRequestName,
+        panelEmail: panelRequestEmail,
+        notes: panelRequestNotes || undefined,
+      })
+      setSuccess('Panel request submitted successfully. Admin will review and create the account.')
+      setPanelRequestName('')
+      setPanelRequestEmail('')
+      setPanelRequestNotes('')
+      setTimeout(() => setSuccess(null), 5000)
+    } catch (err: any) {
+      setError('Failed to submit panel request: ' + (err.response?.data?.message || err.message || 'Unknown error'))
+    } finally {
+      setIsSubmittingRequest(false)
+    }
+  }, [panelRequestName, panelRequestEmail, panelRequestNotes])
+
   // Memoize selected skill names
   const selectedSkillNames = useMemo(
     () =>
@@ -1566,7 +1593,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     cursor: 'pointer',
     transition: 'background-color 0.2s, transform 0.1s',
   },
-<<<<<<< HEAD
   card: {
     backgroundColor: white,
     padding: '1.75rem',
