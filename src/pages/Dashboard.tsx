@@ -1,31 +1,28 @@
 // AIModified:2026-01-11T06:08:23Z
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 
 export const Dashboard: React.FC = () => {
-  const { user, logout } = useAuth()
+  const { user, isLoading } = useAuth()
   const navigate = useNavigate()
 
-  const handleLogout = async () => {
-    await logout()
-    navigate('/login', { replace: true })
-  }
+  // Redirect to role-specific dashboard
+  useEffect(() => {
+    if (!isLoading && user) {
+      if (user.role === 'HR') {
+        navigate('/hr-dashboard', { replace: true })
+      } else if (user.role === 'PANEL') {
+        navigate('/panel-dashboard', { replace: true })
+      }
+    }
+  }, [user, isLoading, navigate])
 
+  // Show loading while redirecting
   return (
     <div style={styles.container}>
-      <div style={styles.header}>
-        <h1>Dashboard</h1>
-        <div style={styles.userInfo}>
-          <span>Welcome, {user?.name} ({user?.role})</span>
-          <button onClick={handleLogout} style={styles.logoutButton}>
-            Logout
-          </button>
-        </div>
-      </div>
       <div style={styles.content}>
-        <p>Dashboard content will be implemented here.</p>
-        <p>Role-based routing will be configured later.</p>
+        <p>Redirecting to your dashboard...</p>
       </div>
     </div>
   )

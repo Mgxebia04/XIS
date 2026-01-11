@@ -5,6 +5,8 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Login } from '@/pages/Login'
 import { Dashboard } from '@/pages/Dashboard'
+import { PanelDashboard } from '@/pages/PanelDashboard'
+import { HRDashboard } from '@/pages/HRDashboard'
 import { Unauthorized } from '@/pages/Unauthorized'
 
 function App() {
@@ -18,6 +20,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/panel-dashboard"
+            element={
+              <ProtectedRoute allowedRoles={['PANEL']}>
+                <PanelDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr-dashboard"
+            element={
+              <ProtectedRoute allowedRoles={['HR']}>
+                <HRDashboard />
               </ProtectedRoute>
             }
           />
