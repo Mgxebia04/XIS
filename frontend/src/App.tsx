@@ -7,6 +7,7 @@ import { Login } from '@/pages/Login'
 import { Dashboard } from '@/pages/Dashboard'
 import { PanelDashboard } from '@/pages/PanelDashboard'
 import { HRDashboard } from '@/pages/HRDashboard'
+import { AdminDashboard } from '@/pages/AdminDashboard'
 import { Unauthorized } from '@/pages/Unauthorized'
 
 function App() {
@@ -36,6 +37,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['HR']}>
                 <HRDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin-dashboard"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AdminDashboard />
               </ProtectedRoute>
             }
           />

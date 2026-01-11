@@ -10,7 +10,9 @@ export const Dashboard: React.FC = () => {
   // Redirect to role-specific dashboard
   useEffect(() => {
     if (!isLoading && user) {
-      if (user.role === 'HR') {
+      if (user.role === 'ADMIN') {
+        navigate('/admin-dashboard', { replace: true })
+      } else if (user.role === 'HR') {
         navigate('/hr-dashboard', { replace: true })
       } else if (user.role === 'PANEL') {
         navigate('/panel-dashboard', { replace: true })

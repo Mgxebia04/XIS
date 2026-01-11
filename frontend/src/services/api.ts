@@ -66,17 +66,27 @@ class ApiService {
     const backendResponse = response.data
     
     // Transform backend response to frontend format
-    const userRole: 'HR' | 'PANEL' = backendResponse.role === 'HR Manager' ? 'HR' : 'PANEL'
+    let userRole: 'HR' | 'PANEL' | 'ADMIN'
+    if (backendResponse.role === 'HR Manager') {
+      userRole = 'HR'
+    } else if (backendResponse.role === 'Admin') {
+      userRole = 'ADMIN'
+    } else {
+      userRole = 'PANEL'
+    }
     
-    // For Interviewer, try to fetch the profile to get the name
-    let userName = 'HR Manager'
-    if (backendResponse.role === 'Interviewer' && backendResponse.interviewerProfileId) {
+    // Get user name based on role
+    let userName = backendResponse.email.split('@')[0] || 'User'
+    if (backendResponse.role === 'HR Manager') {
+      userName = 'HR Manager'
+    } else if (backendResponse.role === 'Admin') {
+      userName = 'Admin'
+    } else if (backendResponse.role === 'Interviewer' && backendResponse.interviewerProfileId) {
       try {
         const profile = await this.getInterviewerProfile(backendResponse.interviewerProfileId)
         userName = profile.name || backendResponse.email.split('@')[0] || 'Interviewer'
       } catch (error) {
         // Fallback to email username if profile fetch fails
-        // This can happen if profile doesn't exist yet or API is unavailable
         userName = backendResponse.email.split('@')[0] || 'Interviewer'
       }
     }
@@ -325,6 +335,42 @@ class ApiService {
   private parseTimeToTimeSpan(timeStr: string): string {
     // Convert "HH:mm" to "HH:mm:00" format for TimeSpan
     return timeStr.length === 5 ? `${timeStr}:00` : timeStr
+  }
+
+  // Admin API
+  async onboardHr(request: { name: string; email: string; initialPassword: string }): Promise<any> {
+    const response = await this.client.post('/api/admin/onboard-hr', request)
+    return response.data
+  }
+
+  async getPanelRequests(): Promise<any[]> {
+    const response = await this.client.get('/api/admin/panel-requests')
+    return response.data
+  }
+
+  async createPanel(request: { panelRequestId: number; initialPassword: string }): Promise<any> {
+    const response = await this.client.post('/api/admin/create-panel', request)
+    return response.data
+  }
+
+  async rejectPanelRequest(requestId: number): Promise<void> {
+    await this.client.post(`/api/admin/reject-panel-request/${requestId}`)
+  }
+
+  // Panel Request API (for HR)
+  async requestPanel(request: { panelName: string; panelEmail: string; notes?: string }): Promise<any> {
+    const response = await this.client.post('/api/panelrequest/request-panel', request)
+    return response.data
+  }
+
+  async getMyPanelRequests(): Promise<any[]> {
+    const response = await this.client.get('/api/panelrequest/my-requests')
+    return response.data
+  }
+
+  // Change Password API
+  async changePassword(request: { currentPassword: string; newPassword: string }): Promise<void> {
+    await this.client.post('/api/auth/change-password', request)
   }
 
   getClient(): AxiosInstance {

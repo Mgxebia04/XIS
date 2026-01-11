@@ -45,6 +45,22 @@ SET PasswordHash = '$2a$11$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy
 WHERE Email = 'hr@xebia.com' AND Role = 'HR Manager';
 GO
 
+-- Insert Admin users (password: 123456)
+-- BCrypt hash for password "123456" (cost factor 11)
+IF NOT EXISTS (SELECT * FROM Users WHERE Email = 'admin@xebia.com')
+BEGIN
+    INSERT INTO Users (Email, PasswordHash, Role, Name, CreatedAt)
+    VALUES ('admin@xebia.com', '$2a$11$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Admin', 'Admin User', GETUTCDATE());
+END
+GO
+
+IF NOT EXISTS (SELECT * FROM Users WHERE Email = 'admin2@xebia.com')
+BEGIN
+    INSERT INTO Users (Email, PasswordHash, Role, Name, CreatedAt)
+    VALUES ('admin2@xebia.com', '$2a$11$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Admin', 'Admin User 2', GETUTCDATE());
+END
+GO
+
 -- Insert HR Manager user if not exists (password: 123456)
 IF NOT EXISTS (SELECT * FROM Users WHERE Email = 'hr@xebia.com')
 BEGIN
@@ -138,11 +154,39 @@ BEGIN
 END
 GO
 
+-- Insert Open Positions
+IF NOT EXISTS (SELECT * FROM OpenPositions WHERE Title = 'GHOP-001 - Full Stack Developer')
+    INSERT INTO OpenPositions (Title, Description, Department, IsActive, CreatedAt)
+    VALUES ('GHOP-001 - Full Stack Developer', 'Full-stack developer position requiring React and Node.js skills', 'Engineering', 1, GETUTCDATE());
+GO
+
+IF NOT EXISTS (SELECT * FROM OpenPositions WHERE Title = 'GHOP-002 - Backend Developer')
+    INSERT INTO OpenPositions (Title, Description, Department, IsActive, CreatedAt)
+    VALUES ('GHOP-002 - Backend Developer', 'Backend developer position requiring Django and Python skills', 'Engineering', 1, GETUTCDATE());
+GO
+
+IF NOT EXISTS (SELECT * FROM OpenPositions WHERE Title = 'GHOP-003 - Frontend Developer')
+    INSERT INTO OpenPositions (Title, Description, Department, IsActive, CreatedAt)
+    VALUES ('GHOP-003 - Frontend Developer', 'Frontend developer position requiring React and JavaScript skills', 'Engineering', 1, GETUTCDATE());
+GO
+
+IF NOT EXISTS (SELECT * FROM OpenPositions WHERE Title = 'GHOP-004 - Full Stack Engineer')
+    INSERT INTO OpenPositions (Title, Description, Department, IsActive, CreatedAt)
+    VALUES ('GHOP-004 - Full Stack Engineer', 'Full-stack engineer position requiring both frontend and backend skills', 'Engineering', 1, GETUTCDATE());
+GO
+
 -- Insert sample Interviewees
 -- GHOP-001 candidates (Full-stack: React and Node.js)
+DECLARE @Position1Id INT = (SELECT Id FROM OpenPositions WHERE Title = 'GHOP-001 - Full Stack Developer');
 IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'james.smith@example.com')
-    INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
-    VALUES ('James Smith', 'james.smith@example.com', 'React', GETUTCDATE());
+    INSERT INTO Interviewees (Name, Email, PrimarySkill, PositionId, CreatedAt)
+    VALUES ('James Smith', 'james.smith@example.com', 'React', @Position1Id, GETUTCDATE());
+GO
+
+DECLARE @Position1Id2 INT = (SELECT Id FROM OpenPositions WHERE Title = 'GHOP-001 - Full Stack Developer');
+IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'emma.wilson@example.com')
+    INSERT INTO Interviewees (Name, Email, PrimarySkill, PositionId, CreatedAt)
+    VALUES ('Emma Wilson', 'emma.wilson@example.com', 'Node.js', @Position1Id2, GETUTCDATE());
 GO
 
 IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'emma.wilson@example.com')
@@ -151,36 +195,42 @@ IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'emma.wilson@example.com
 GO
 
 -- GHOP-002 candidates (Backend: Django)
+DECLARE @Position2Id INT = (SELECT Id FROM OpenPositions WHERE Title = 'GHOP-002 - Backend Developer');
 IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'rachel.brown@example.com')
-    INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
-    VALUES ('Rachel Brown', 'rachel.brown@example.com', 'Python', GETUTCDATE());
+    INSERT INTO Interviewees (Name, Email, PrimarySkill, PositionId, CreatedAt)
+    VALUES ('Rachel Brown', 'rachel.brown@example.com', 'Python', @Position2Id, GETUTCDATE());
 GO
 
+DECLARE @Position2Id2 INT = (SELECT Id FROM OpenPositions WHERE Title = 'GHOP-002 - Backend Developer');
 IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'michael.chen@example.com')
-    INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
-    VALUES ('Michael Chen', 'michael.chen@example.com', 'Django', GETUTCDATE());
+    INSERT INTO Interviewees (Name, Email, PrimarySkill, PositionId, CreatedAt)
+    VALUES ('Michael Chen', 'michael.chen@example.com', 'Django', @Position2Id2, GETUTCDATE());
 GO
 
 -- GHOP-003 candidates (Frontend: React and JavaScript)
+DECLARE @Position3Id INT = (SELECT Id FROM OpenPositions WHERE Title = 'GHOP-003 - Frontend Developer');
 IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'sarah.johnson@example.com')
-    INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
-    VALUES ('Sarah Johnson', 'sarah.johnson@example.com', 'React', GETUTCDATE());
+    INSERT INTO Interviewees (Name, Email, PrimarySkill, PositionId, CreatedAt)
+    VALUES ('Sarah Johnson', 'sarah.johnson@example.com', 'React', @Position3Id, GETUTCDATE());
 GO
 
+DECLARE @Position3Id2 INT = (SELECT Id FROM OpenPositions WHERE Title = 'GHOP-003 - Frontend Developer');
 IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'david.martinez@example.com')
-    INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
-    VALUES ('David Martinez', 'david.martinez@example.com', 'JavaScript', GETUTCDATE());
+    INSERT INTO Interviewees (Name, Email, PrimarySkill, PositionId, CreatedAt)
+    VALUES ('David Martinez', 'david.martinez@example.com', 'JavaScript', @Position3Id2, GETUTCDATE());
 GO
 
 -- GHOP-004 candidates (Full-stack: Frontend and Backend)
+DECLARE @Position4Id INT = (SELECT Id FROM OpenPositions WHERE Title = 'GHOP-004 - Full Stack Engineer');
 IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'lisa.anderson@example.com')
-    INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
-    VALUES ('Lisa Anderson', 'lisa.anderson@example.com', 'React', GETUTCDATE());
+    INSERT INTO Interviewees (Name, Email, PrimarySkill, PositionId, CreatedAt)
+    VALUES ('Lisa Anderson', 'lisa.anderson@example.com', 'React', @Position4Id, GETUTCDATE());
 GO
 
+DECLARE @Position4Id2 INT = (SELECT Id FROM OpenPositions WHERE Title = 'GHOP-004 - Full Stack Engineer');
 IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'robert.taylor@example.com')
-    INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
-    VALUES ('Robert Taylor', 'robert.taylor@example.com', 'Node.js', GETUTCDATE());
+    INSERT INTO Interviewees (Name, Email, PrimarySkill, PositionId, CreatedAt)
+    VALUES ('Robert Taylor', 'robert.taylor@example.com', 'Node.js', @Position4Id2, GETUTCDATE());
 GO
 
 PRINT 'Seed data inserted successfully!';

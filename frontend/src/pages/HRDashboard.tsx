@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { apiService } from '@/services/api'
+import { ChangePassword } from '@/components/ChangePassword'
 import type {
   Skill,
   MatchedPanel,
@@ -43,13 +44,21 @@ export const HRDashboard: React.FC = () => {
   const [isSkillDropdownOpen, setIsSkillDropdownOpen] = useState(false)
   const [skillSearchQuery, setSkillSearchQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const skillDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Panel Request state
+  const [panelRequestName, setPanelRequestName] = useState('')
+  const [panelRequestEmail, setPanelRequestEmail] = useState('')
+  const [panelRequestNotes, setPanelRequestNotes] = useState('')
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false)
 
   // Scheduled interviews
   const [scheduledInterviews, setScheduledInterviews] = useState<
     ScheduledInterview[]
   >([])
   const [isLoadingInterviews, setIsLoadingInterviews] = useState(false)
+  const [showChangePassword, setShowChangePassword] = useState(false)
 
   // Load skills and interview types on mount - use ref to prevent double calls in StrictMode
   const hasLoadedInitialData = useRef(false)
@@ -407,7 +416,7 @@ export const HRDashboard: React.FC = () => {
 
   return (
     <div style={styles.container}>
-      {/* Error notification */}
+      {/* Error/Success notification */}
       {error && (
         <div style={styles.errorBanner} className="fade-in">
           <span style={styles.errorIcon}>⚠️</span>
@@ -416,6 +425,19 @@ export const HRDashboard: React.FC = () => {
             onClick={() => setError(null)}
             style={styles.errorClose}
             aria-label="Close error"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {success && (
+        <div style={styles.successBanner} className="fade-in">
+          <span style={styles.successIcon}>✓</span>
+          <span>{success}</span>
+          <button
+            onClick={() => setSuccess(null)}
+            style={styles.errorClose}
+            aria-label="Close success"
           >
             ✕
           </button>
@@ -749,6 +771,65 @@ export const HRDashboard: React.FC = () => {
             )}
 
 
+            {/* Request Panel Section */}
+            <section style={styles.section} className="fade-in-up">
+              <h2 style={styles.sectionTitle}>Request New Panel Member</h2>
+              <div style={styles.card}>
+                <div style={styles.formRow}>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>
+                      Panel Name <span style={styles.required}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={panelRequestName}
+                      onChange={(e) => setPanelRequestName(e.target.value)}
+                      placeholder="Enter panel member name"
+                      style={styles.input}
+                      className="input-focus"
+                      disabled={isSubmittingRequest}
+                    />
+                  </div>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>
+                      Panel Email <span style={styles.required}>*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={panelRequestEmail}
+                      onChange={(e) => setPanelRequestEmail(e.target.value)}
+                      placeholder="Enter panel member email"
+                      style={styles.input}
+                      className="input-focus"
+                      disabled={isSubmittingRequest}
+                    />
+                  </div>
+                </div>
+                <div style={styles.formRow}>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Notes (Optional)</label>
+                    <textarea
+                      value={panelRequestNotes}
+                      onChange={(e) => setPanelRequestNotes(e.target.value)}
+                      placeholder="Add any additional notes..."
+                      style={styles.textarea}
+                      className="input-focus"
+                      rows={3}
+                      disabled={isSubmittingRequest}
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={handleRequestPanel}
+                  style={styles.submitButton}
+                  className="button-hover"
+                  disabled={isSubmittingRequest || !panelRequestName || !panelRequestEmail}
+                >
+                  {isSubmittingRequest ? 'Submitting...' : 'Submit Request'}
+                </button>
+              </div>
+            </section>
+
             {/* Scheduled Interviews */}
             <section style={styles.section} className="fade-in-up">
               <h2 style={styles.sectionTitle}>Scheduled Interviews</h2>
@@ -836,6 +917,34 @@ export const HRDashboard: React.FC = () => {
               ) : (
                 <p style={styles.emptyMessage}>No scheduled interviews</p>
               )}
+            </section>
+
+            {/* Change Password Section */}
+            <section style={styles.section} className="fade-in-up">
+              <h2 style={styles.sectionTitle}>Account Settings</h2>
+              <div style={styles.card}>
+                {!showChangePassword ? (
+                  <div style={styles.settingsContent}>
+                    <p style={styles.settingsText}>Manage your account password</p>
+                    <button
+                      onClick={() => setShowChangePassword(true)}
+                      style={styles.changePasswordButton}
+                      className="button-hover"
+                    >
+                      Change Password
+                    </button>
+                  </div>
+                ) : (
+                  <ChangePassword
+                    onSuccess={() => {
+                      setShowChangePassword(false)
+                      setSuccess('Password changed successfully')
+                      setTimeout(() => setSuccess(null), 5000)
+                    }}
+                    onCancel={() => setShowChangePassword(false)}
+                  />
+                )}
+              </div>
             </section>
           </div>
         </main>
@@ -1424,5 +1533,62 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontWeight: '500',
     cursor: 'pointer',
     transition: 'background-color 0.2s, transform 0.1s',
+  },
+  card: {
+    backgroundColor: white,
+    padding: '1.75rem',
+    borderRadius: '12px',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.1)',
+    border: `1px solid ${borderGray}`,
+  },
+  textarea: {
+    padding: '0.625rem 0.75rem',
+    border: `1px solid ${borderGray}`,
+    borderRadius: '6px',
+    fontSize: '0.875rem',
+    backgroundColor: white,
+    color: textDark,
+    transition: 'all 0.2s',
+    fontFamily: 'inherit',
+    resize: 'vertical',
+  },
+  successBanner: {
+    position: 'sticky',
+    top: '3.5rem',
+    zIndex: 40,
+    backgroundColor: '#d4edda',
+    color: '#155724',
+    padding: '0.75rem 1rem',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    borderBottom: '1px solid #c3e6cb',
+    fontSize: '0.875rem',
+  },
+  successIcon: {
+    fontSize: '1rem',
+  },
+  settingsContent: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '1rem',
+  },
+  settingsText: {
+    fontSize: '0.875rem',
+    color: textDark,
+    margin: 0,
+  },
+  changePasswordButton: {
+    padding: '0.625rem 1.25rem',
+    backgroundColor: primaryPurple,
+    color: white,
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '0.875rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    boxShadow: '0 2px 4px rgba(74, 30, 71, 0.2)',
   },
 }

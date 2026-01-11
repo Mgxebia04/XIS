@@ -21,6 +21,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<InterviewType> InterviewTypes { get; set; }
     public DbSet<InterviewRequirement> InterviewRequirements { get; set; }
     public DbSet<OpenPosition> OpenPositions { get; set; }
+    public DbSet<PanelRequest> PanelRequests { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -145,6 +146,24 @@ public class ApplicationDbContext : DbContext
                 .WithMany(e => e.InterviewRequirements)
                 .HasForeignKey(e => e.SkillId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // PanelRequest configuration
+        modelBuilder.Entity<PanelRequest>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.PanelName).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.PanelEmail).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.Notes).HasMaxLength(1000);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(50);
+            entity.HasOne(e => e.RequestedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.RequestedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.ProcessedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.ProcessedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

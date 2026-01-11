@@ -1,6 +1,6 @@
 // AIModified:2026-01-11T16:22:15Z
-export type UserRole = 'HR' | 'PANEL'
-export type BackendRole = 'HR Manager' | 'Interviewer'
+export type UserRole = 'HR' | 'PANEL' | 'ADMIN'
+export type BackendRole = 'HR Manager' | 'Interviewer' | 'Admin'
 
 export interface User {
   id: string
