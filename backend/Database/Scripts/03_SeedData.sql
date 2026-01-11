@@ -1,4 +1,4 @@
--- AIModified:2026-01-11T10:24:48Z
+-- AIModified:2026-01-11T16:13:16Z
 -- Seed Data Script for Interview Scheduling System
 -- Run this script to populate initial data
 
@@ -25,8 +25,17 @@ IF NOT EXISTS (SELECT * FROM InterviewTypes WHERE Name = 'L1 - Initial Screening
     INSERT INTO InterviewTypes (Name, Description, CreatedAt) VALUES ('L1 - Initial Screening', 'Initial screening interview', GETUTCDATE());
 IF NOT EXISTS (SELECT * FROM InterviewTypes WHERE Name = 'L2 - Technical Round')
     INSERT INTO InterviewTypes (Name, Description, CreatedAt) VALUES ('L2 - Technical Round', 'Technical assessment round', GETUTCDATE());
-IF NOT EXISTS (SELECT * FROM InterviewTypes WHERE Name = 'L3 - Final Round')
-    INSERT INTO InterviewTypes (Name, Description, CreatedAt) VALUES ('L3 - Final Round', 'Final interview round', GETUTCDATE());
+IF NOT EXISTS (SELECT * FROM InterviewTypes WHERE Name = 'L3 - Cultural Round')
+    INSERT INTO InterviewTypes (Name, Description, CreatedAt) VALUES ('L3 - Cultural Round', 'Cultural fit assessment round', GETUTCDATE());
+GO
+
+-- Update existing L3 - Final Round to L3 - Cultural Round (if exists)
+IF EXISTS (SELECT * FROM InterviewTypes WHERE Name = 'L3 - Final Round')
+BEGIN
+    UPDATE InterviewTypes 
+    SET Name = 'L3 - Cultural Round', Description = 'Cultural fit assessment round'
+    WHERE Name = 'L3 - Final Round';
+END
 GO
 
 -- Update existing HR Manager user password to 123456 (if exists)
@@ -130,14 +139,48 @@ END
 GO
 
 -- Insert sample Interviewees
+-- GHOP-001 candidates (Full-stack: React and Node.js)
 IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'james.smith@example.com')
     INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
-    VALUES ('James Smith', 'james.smith@example.com', 'SQL', GETUTCDATE());
+    VALUES ('James Smith', 'james.smith@example.com', 'React', GETUTCDATE());
 GO
 
+IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'emma.wilson@example.com')
+    INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
+    VALUES ('Emma Wilson', 'emma.wilson@example.com', 'Node.js', GETUTCDATE());
+GO
+
+-- GHOP-002 candidates (Backend: Django)
 IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'rachel.brown@example.com')
     INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
     VALUES ('Rachel Brown', 'rachel.brown@example.com', 'Python', GETUTCDATE());
+GO
+
+IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'michael.chen@example.com')
+    INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
+    VALUES ('Michael Chen', 'michael.chen@example.com', 'Django', GETUTCDATE());
+GO
+
+-- GHOP-003 candidates (Frontend: React and JavaScript)
+IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'sarah.johnson@example.com')
+    INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
+    VALUES ('Sarah Johnson', 'sarah.johnson@example.com', 'React', GETUTCDATE());
+GO
+
+IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'david.martinez@example.com')
+    INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
+    VALUES ('David Martinez', 'david.martinez@example.com', 'JavaScript', GETUTCDATE());
+GO
+
+-- GHOP-004 candidates (Full-stack: Frontend and Backend)
+IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'lisa.anderson@example.com')
+    INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
+    VALUES ('Lisa Anderson', 'lisa.anderson@example.com', 'React', GETUTCDATE());
+GO
+
+IF NOT EXISTS (SELECT * FROM Interviewees WHERE Email = 'robert.taylor@example.com')
+    INSERT INTO Interviewees (Name, Email, PrimarySkill, CreatedAt)
+    VALUES ('Robert Taylor', 'robert.taylor@example.com', 'Node.js', GETUTCDATE());
 GO
 
 PRINT 'Seed data inserted successfully!';

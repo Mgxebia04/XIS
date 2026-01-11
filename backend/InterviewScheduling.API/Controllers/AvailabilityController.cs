@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T05:42:58Z
+// AIModified:2026-01-11T17:44:28Z
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using InterviewScheduling.API.Data;
@@ -45,10 +45,24 @@ public class AvailabilityController : ControllerBase
         int interviewerId,
         [FromBody] CreateAvailabilitySlotDto dto)
     {
+        // Check for duplicate slot - same date, start time, and end time for the same interviewer
+        var dateOnly = dto.Date.Date;
+        var existingSlot = await _context.AvailabilitySlots
+            .FirstOrDefaultAsync(a => a.InterviewerProfileId == interviewerId
+                && a.Date == dateOnly
+                && a.StartTime == dto.StartTime
+                && a.EndTime == dto.EndTime
+                && a.IsAvailable);
+
+        if (existingSlot != null)
+        {
+            return BadRequest(new { message = "This availability slot already exists. Please choose a different date or time." });
+        }
+
         var slot = new AvailabilitySlot
         {
             InterviewerProfileId = interviewerId,
-            Date = dto.Date.Date,
+            Date = dateOnly,
             StartTime = dto.StartTime,
             EndTime = dto.EndTime,
             IsAvailable = true

@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T11:13:42Z
+// AIModified:2026-01-11T16:22:15Z
 using Microsoft.EntityFrameworkCore;
 using InterviewScheduling.API.Models;
 
@@ -126,6 +126,10 @@ public class ApplicationDbContext : DbContext
                 .WithMany(e => e.Interviews)
                 .HasForeignKey(e => e.InterviewTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
             entity.Property(e => e.Status).IsRequired().HasMaxLength(50);
         });
 

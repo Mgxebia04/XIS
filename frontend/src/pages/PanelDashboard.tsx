@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T12:35:29Z
+// AIModified:2026-01-11T17:44:28Z
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -44,6 +44,7 @@ export const PanelDashboard: React.FC = () => {
   const [upcomingInterviews, setUpcomingInterviews] = useState<Interview[]>([])
   const [pastInterviews, setPastInterviews] = useState<Interview[]>([])
   const [isLoadingData, setIsLoadingData] = useState(true)
+  const [isReloadingInterviews, setIsReloadingInterviews] = useState(false)
   const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming')
 
   // Cancel confirmation modal state
@@ -67,13 +68,19 @@ export const PanelDashboard: React.FC = () => {
   // Memoize min date/time to avoid recalculation on every render
   const minDateTime = useMemo(() => getMinDateTime(), [])
 
-  // Load profile and data on mount
+  // Load profile and data on mount - use ref to prevent double calls in StrictMode
+  const hasLoadedData = useRef(false)
   useEffect(() => {
+    // Prevent double calls in React StrictMode
+    if (hasLoadedData.current) return
+    hasLoadedData.current = true
+
     const loadData = async () => {
       if (!user?.interviewerProfileId) {
         setError('Interviewer profile not found')
         setIsLoadingProfile(false)
         setIsLoadingData(false)
+        hasLoadedData.current = false // Reset on error to allow retry
         return
       }
 
@@ -158,6 +165,7 @@ export const PanelDashboard: React.FC = () => {
         setPastInterviews(past)
       } catch (err: any) {
         setError('Failed to load data: ' + (err.message || 'Unknown error'))
+        hasLoadedData.current = false // Reset on error to allow retry
       } finally {
         setIsLoadingProfile(false)
         setIsLoadingData(false)
@@ -261,6 +269,20 @@ export const PanelDashboard: React.FC = () => {
     }
 
     if (newSlot.date && newSlot.startTime && newSlot.endTime) {
+      // Check for duplicate slot in the current list
+      const isDuplicate = availabilitySlots.some(slot => {
+        const slotDate = new Date(slot.date).toISOString().split('T')[0]
+        const newSlotDate = new Date(newSlot.date).toISOString().split('T')[0]
+        return slotDate === newSlotDate &&
+               slot.startTime === newSlot.startTime &&
+               slot.endTime === newSlot.endTime
+      })
+
+      if (isDuplicate) {
+        setError('This availability slot already exists. Please choose a different date or time.')
+        return
+      }
+
       if (isFutureDateTime(newSlot.date, newSlot.startTime)) {
         try {
           const slot = await apiService.createAvailability(user.interviewerProfileId, {
@@ -270,14 +292,16 @@ export const PanelDashboard: React.FC = () => {
           })
           setAvailabilitySlots((prev) => [...prev, slot])
           setNewSlot({ date: '', startTime: '', endTime: '' })
+          setError(null) // Clear any previous errors on success
         } catch (err: any) {
-          setError('Failed to add availability slot: ' + (err.message || 'Unknown error'))
+          const errorMessage = err.response?.data?.message || err.message || 'Unknown error'
+          setError('Failed to add availability slot: ' + errorMessage)
         }
       } else {
         setError('Please select a future date and time')
       }
     }
-  }, [newSlot, user?.interviewerProfileId])
+  }, [newSlot, user?.interviewerProfileId, availabilitySlots])
 
   const handleRemoveAvailabilitySlot = useCallback(async (id: number) => {
     try {
@@ -311,6 +335,7 @@ export const PanelDashboard: React.FC = () => {
 
     try {
       console.log('Calling cancelInterview API for interview:', idToCancel)
+      setIsReloadingInterviews(true)
       await apiService.cancelInterview(idToCancel)
       console.log('Interview cancelled successfully')
       
@@ -363,14 +388,9 @@ export const PanelDashboard: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Error cancelling interview:', err)
-      console.error('Error details:', {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-      })
-      const errorMessage = err.response?.data?.message || err.message || 'Unknown error'
-      setError('Failed to cancel interview: ' + errorMessage)
+      setError('Failed to cancel interview: ' + (err.message || 'Unknown error'))
+    } finally {
+      setIsReloadingInterviews(false)
     }
   }, [user?.interviewerProfileId])
 
@@ -695,7 +715,14 @@ export const PanelDashboard: React.FC = () => {
               </div>
 
               <div style={styles.interviewsList}>
-                {currentInterviews.length > 0 ? (
+                {(isLoadingData || isReloadingInterviews) ? (
+                  <div style={styles.loadingContainer}>
+                    <div style={styles.loader}></div>
+                    <p style={styles.loadingText}>
+                      {isReloadingInterviews ? 'Updating interviews...' : 'Loading interviews...'}
+                    </p>
+                  </div>
+                ) : currentInterviews.length > 0 ? (
                   currentInterviews.map(
                     (interview, index) => (
                       <div
@@ -746,14 +773,18 @@ export const PanelDashboard: React.FC = () => {
                               </span>
                             ))}
                           </div>
-                          {interview.hrName && (
+                          {(interview.hrName || interview.hrEmail) && (
                             <div style={styles.hrInfo}>
                               <span style={styles.hrIcon}>👤</span>
                               <div style={styles.hrDetails}>
                                 <span style={styles.hrLabel}>Scheduled by:</span>
-                                <span style={styles.hrName}>{interview.hrName}</span>
+                                {interview.hrName && (
+                                  <span style={styles.hrName}>{interview.hrName}</span>
+                                )}
                                 {interview.hrEmail && (
-                                  <span style={styles.hrEmail}>({interview.hrEmail})</span>
+                                  <span style={styles.hrEmail}>
+                                    {interview.hrName ? ` (${interview.hrEmail})` : interview.hrEmail}
+                                  </span>
                                 )}
                               </div>
                             </div>
@@ -1549,6 +1580,35 @@ const styles: { [key: string]: React.CSSProperties } = {
     color: textLight,
     margin: 0,
     maxWidth: '400px',
+  },
+  loadingContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '3rem 2rem',
+    gap: '1rem',
+  },
+  loader: {
+    width: '40px',
+    height: '40px',
+    border: '4px solid #f3f3f3',
+    borderTop: '4px solid #4a1e47',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite',
+  },
+  loadingText: {
+    fontSize: '0.875rem',
+    color: textLight,
+    margin: 0,
+  },
+  inlineLoader: {
+    width: '20px',
+    height: '20px',
+    border: '3px solid #f3f3f3',
+    borderTop: '3px solid #4a1e47',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite',
   },
   hrInfo: {
     marginTop: '1rem',

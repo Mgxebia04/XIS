@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T09:56:34Z
+// AIModified:2026-01-11T16:22:15Z
 export type UserRole = 'HR' | 'PANEL'
 export type BackendRole = 'HR Manager' | 'Interviewer'
 
@@ -16,6 +16,7 @@ export interface LoginCredentials {
 }
 
 export interface BackendLoginResponse {
+  userId: number
   token: string
   email: string
   role: BackendRole
@@ -57,6 +58,8 @@ export interface Interview {
   candidateEmail?: string // From Interviewee
   interviewType?: string // From InterviewType
   skills?: string[] // Skill names from InterviewRequirements
+  hrName?: string | null // HR user who scheduled the interview
+  hrEmail?: string | null // HR user email who scheduled the interview
 }
 
 // HR Dashboard Types
@@ -124,4 +127,5 @@ export interface InterviewScheduleDto {
   endTime: string
   primarySkillIds: number[]
   secondarySkillIds: number[]
+  createdByUserId?: number // HR user who scheduled the interview
 }

@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T05:42:58Z
+// AIModified:2026-01-11T16:22:15Z
 namespace InterviewScheduling.API.Models;
 
 public class Interview
@@ -13,10 +13,12 @@ public class Interview
     public string Status { get; set; } = "Scheduled"; // Scheduled, Completed, Cancelled
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
+    public int? CreatedByUserId { get; set; } // HR user who scheduled the interview
     
     // Navigation properties
     public InterviewerProfile InterviewerProfile { get; set; } = null!;
     public Interviewee Interviewee { get; set; } = null!;
     public InterviewType InterviewType { get; set; } = null!;
+    public User? CreatedByUser { get; set; } // HR user who scheduled the interview
     public ICollection<InterviewRequirement> InterviewRequirements { get; set; } = new List<InterviewRequirement>();
 }

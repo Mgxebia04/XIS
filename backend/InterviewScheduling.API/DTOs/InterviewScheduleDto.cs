@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T11:35:36Z
+// AIModified:2026-01-11T16:22:15Z
 namespace InterviewScheduling.API.DTOs;
 
 public class InterviewScheduleDto
@@ -11,6 +11,7 @@ public class InterviewScheduleDto
     public TimeSpan EndTime { get; set; }
     public List<int> PrimarySkillIds { get; set; } = new();
     public List<int> SecondarySkillIds { get; set; } = new();
+    public int? CreatedByUserId { get; set; } // HR user who scheduled the interview
 }
 
 public class AvailableInterviewerDto

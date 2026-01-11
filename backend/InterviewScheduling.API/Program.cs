@@ -1,7 +1,8 @@
-// AIModified:2026-01-11T11:35:36Z
+// AIModified:2026-01-11T16:22:15Z
 using Microsoft.EntityFrameworkCore;
 using InterviewScheduling.API.Data;
 using InterviewScheduling.API.Models;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +13,8 @@ builder.Services.AddControllers()
     {
         // Handle circular references in JSON serialization
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+        // Use camelCase for JSON property names to match frontend expectations
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

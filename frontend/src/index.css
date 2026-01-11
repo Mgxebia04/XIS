@@ -1,4 +1,4 @@
-/* AIModified:2026-01-11T06:08:23Z */
+/* AIModified:2026-01-11T17:03:46Z */
 * {
   margin: 0;
   padding: 0;
@@ -59,6 +59,15 @@ body {
   to {
     opacity: 1;
     transform: translateX(0);
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
   }
 }
 

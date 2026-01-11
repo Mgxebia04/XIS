@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T10:33:15Z
+// AIModified:2026-01-11T16:22:15Z
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -43,6 +43,7 @@ public class AuthController : ControllerBase
         // Role is determined from the user table, not from the request
         var response = new LoginResponse
         {
+            UserId = user.Id,
             Email = user.Email,
             Role = user.Role,
             Token = GenerateSimpleToken(user.Id, user.Role), // Simple token generation

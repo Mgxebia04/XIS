@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T13:10:55Z
+// AIModified:2026-01-11T17:32:40Z
 import axios, { AxiosInstance, AxiosError } from 'axios'
 import type {
   AuthResponse,
@@ -83,7 +83,7 @@ class ApiService {
     
     return {
       user: {
-        id: backendResponse.interviewerProfileId?.toString() || backendResponse.email,
+        id: backendResponse.userId.toString(), // Use userId from backend
         email: backendResponse.email,
         name: userName,
         role: userRole,
@@ -190,15 +190,26 @@ class ApiService {
         scheduledDateStr = new Date(interview.scheduledDate).toISOString().split('T')[0]
       }
       
+      // Backend now returns optimized DTO with flat structure including HR details
+      // Map hrName and hrEmail - handle both null and empty string cases
+      const hrName = interview.hrName && interview.hrName.trim() !== '' ? interview.hrName : null
+      const hrEmail = interview.hrEmail && interview.hrEmail.trim() !== '' ? interview.hrEmail : null
+      
       return {
-        ...interview,
+        id: interview.id,
+        interviewerProfileId: interview.interviewerProfileId,
+        intervieweeId: interview.intervieweeId,
+        interviewTypeId: interview.interviewTypeId,
         scheduledDate: scheduledDateStr,
         startTime: this.formatTimeSpan(interview.startTime),
         endTime: this.formatTimeSpan(interview.endTime),
-        candidateName: interview.interviewee?.name || '',
-        candidateEmail: interview.interviewee?.email || '',
-        interviewType: interview.interviewType?.name || '',
-        skills: (interview.interviewRequirements || []).map((r: any) => r.skill?.name || '').filter(Boolean),
+        status: interview.status,
+        candidateName: interview.candidateName || '',
+        candidateEmail: interview.candidateEmail || '',
+        interviewType: interview.interviewTypeName || '',
+        skills: interview.skills || [],
+        hrName: hrName,
+        hrEmail: hrEmail,
       }
     })
   }
@@ -272,6 +283,7 @@ class ApiService {
       endTime: this.parseTimeToTimeSpan(schedule.endTime),
       primarySkillIds: schedule.primarySkillIds || [],
       secondarySkillIds: schedule.secondarySkillIds || [],
+      createdByUserId: schedule.createdByUserId,
     })
     return {
       ...response.data,

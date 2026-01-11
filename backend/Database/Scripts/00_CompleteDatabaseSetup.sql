@@ -21,5 +21,8 @@
 -- Step 6: Seed Positions
 :r 06_SeedPositions.sql
 
+-- Step 7: Update Position Titles to GHOP Format (if needed)
+:r 07_UpdatePositionTitlesToGHOPFormat.sql
+
 PRINT 'Database setup completed successfully!';
 GO

@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T12:46:28Z
+// AIModified:2026-01-11T17:32:40Z
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,17 +22,34 @@ public class ScheduleController : ControllerBase
     }
 
     [HttpGet("interviewer/{interviewerId}")]
-    public async Task<ActionResult<List<Interview>>> GetInterviewerSchedule(int interviewerId)
+    public async Task<ActionResult<List<InterviewerScheduleDto>>> GetInterviewerSchedule(int interviewerId)
     {
-        var interviews = await _context.Interviews
-            .Include(i => i.Interviewee)
-            .Include(i => i.InterviewType)
-            .Include(i => i.InterviewRequirements)
-                .ThenInclude(r => r.Skill)
-            .Where(i => i.InterviewerProfileId == interviewerId)
-            .OrderBy(i => i.ScheduledDate)
-            .ThenBy(i => i.StartTime)
-            .ToListAsync();
+        // Use projection to DTO for better performance - avoids loading full entity graphs
+        // Join with Users table to get HR details explicitly
+        var interviews = await (from i in _context.Interviews
+                                where i.InterviewerProfileId == interviewerId
+                                join hr in _context.Users on i.CreatedByUserId equals hr.Id into hrGroup
+                                from hrUser in hrGroup.DefaultIfEmpty()
+                                select new InterviewerScheduleDto
+                                {
+                                    Id = i.Id,
+                                    InterviewerProfileId = i.InterviewerProfileId,
+                                    IntervieweeId = i.IntervieweeId,
+                                    InterviewTypeId = i.InterviewTypeId,
+                                    ScheduledDate = i.ScheduledDate,
+                                    StartTime = i.StartTime,
+                                    EndTime = i.EndTime,
+                                    Status = i.Status,
+                                    CandidateName = i.Interviewee.Name,
+                                    CandidateEmail = i.Interviewee.Email,
+                                    InterviewTypeName = i.InterviewType.Name,
+                                    Skills = i.InterviewRequirements.Select(r => r.Skill.Name).ToList(),
+                                    HrName = hrUser != null ? hrUser.Name : null,
+                                    HrEmail = hrUser != null ? hrUser.Email : null
+                                })
+                                .OrderBy(i => i.ScheduledDate)
+                                .ThenBy(i => i.StartTime)
+                                .ToListAsync();
 
         return Ok(interviews);
     }
@@ -154,7 +171,8 @@ public class ScheduleController : ControllerBase
             ScheduledDate = dto.ScheduledDate.Date,
             StartTime = dto.StartTime,
             EndTime = dto.EndTime,
-            Status = "Scheduled"
+            Status = "Scheduled",
+            CreatedByUserId = dto.CreatedByUserId
         };
 
         _context.Interviews.Add(interview);

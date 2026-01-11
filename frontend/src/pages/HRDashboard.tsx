@@ -1,11 +1,10 @@
-// AIModified:2026-01-11T12:21:40Z
+// AIModified:2026-01-11T16:13:16Z
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { apiService } from '@/services/api'
 import type {
   Skill,
-  InterviewLevel,
   MatchedPanel,
   ScheduledInterview,
   AvailabilitySlot,
@@ -22,16 +21,12 @@ export const HRDashboard: React.FC = () => {
   // Form state
   const [selectedPositionId, setSelectedPositionId] = useState<number | ''>('')
   const [selectedCandidateId, setSelectedCandidateId] = useState<number | ''>('')
-  const [interviewLevel, setInterviewLevel] = useState<InterviewLevel>('L1')
+  const [selectedInterviewTypeId, setSelectedInterviewTypeId] = useState<number | ''>('')
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
   const [interviewDate, setInterviewDate] = useState('')
   const [interviewTime, setInterviewTime] = useState('')
 
-  // Booking modal state
-  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
-  const [bookingCandidateName, setBookingCandidateName] = useState('')
-  const [bookingCandidateEmail, setBookingCandidateEmail] = useState('')
-  const [pendingBooking, setPendingBooking] = useState<{ panelId: number; slot?: AvailabilitySlot } | null>(null)
+  // Booking state
   const [isBooking, setIsBooking] = useState(false)
 
   // Available skills (from API)
@@ -185,6 +180,10 @@ export const HRDashboard: React.FC = () => {
 
   // Handle form submission to find matching panels
   const handleSubmitForm = useCallback(async () => {
+    if (!selectedInterviewTypeId) {
+      setError('Please select an interview level')
+      return
+    }
     if (selectedSkills.length === 0) {
       setError('Please select at least one skill')
       return
@@ -193,14 +192,12 @@ export const HRDashboard: React.FC = () => {
     setIsSearching(true)
 
     try {
-      // Find interview type ID based on level
-      const interviewType = interviewTypes.find(t => t.name.includes(interviewLevel))
       const primarySkillIds = selectedSkills.map(id => parseInt(id)).filter(id => !isNaN(id))
       
       const searchParams = {
         primarySkillIds,
         secondarySkillIds: [],
-        interviewTypeId: interviewType?.id,
+        interviewTypeId: Number(selectedInterviewTypeId),
         interviewDate: interviewDate || undefined,
         positionId: selectedPositionId ? Number(selectedPositionId) : undefined,
         intervieweeId: selectedCandidateId ? Number(selectedCandidateId) : undefined,
@@ -241,7 +238,7 @@ export const HRDashboard: React.FC = () => {
     } finally {
       setIsSearching(false)
     }
-  }, [selectedSkills, interviewDate, interviewTime, interviewLevel, interviewTypes, availableSkills, selectedPositionId, selectedCandidateId])
+  }, [selectedSkills, interviewDate, interviewTime, selectedInterviewTypeId, availableSkills, selectedPositionId, selectedCandidateId])
 
   const handleLogout = useCallback(async () => {
     await logout()
@@ -257,55 +254,21 @@ export const HRDashboard: React.FC = () => {
     )
   }, [])
 
-  // Open booking modal
+  // Handle booking directly using selected candidate
   const handleBookInterview = useCallback(
-    (panelId: number, slot?: AvailabilitySlot) => {
-      setPendingBooking({ panelId, slot })
-      setBookingCandidateName('')
-      setBookingCandidateEmail('')
-      setIsBookingModalOpen(true)
-    },
-    []
-  )
-
-  // Confirm booking from modal
-  const handleConfirmBooking = useCallback(
-    async () => {
-      // Use selected candidate from dropdown if available, otherwise use modal input
-      let candidate: Interviewee | undefined
-      
-      if (selectedCandidateId) {
-        candidate = filteredCandidates.find(c => c.id === Number(selectedCandidateId))
-      } else if (bookingCandidateName && bookingCandidateEmail) {
-        // Fallback to modal input if no candidate selected
-        candidate = interviewees.find(i => i.email === bookingCandidateEmail)
-        if (!candidate) {
-          candidate = await apiService.createInterviewee({
-            name: bookingCandidateName,
-            email: bookingCandidateEmail,
-            positionId: selectedPositionId ? Number(selectedPositionId) : undefined,
-          })
-          setInterviewees(prev => [...prev, candidate!])
-          if (selectedPositionId) {
-            setFilteredCandidates(prev => [...prev, candidate!])
-          }
-        }
-      } else {
-        setError('Please select a candidate or fill in candidate name and email')
+    async (panelId: number, slot?: AvailabilitySlot) => {
+      // Validate that a candidate is selected
+      if (!selectedCandidateId) {
+        setError('Please select a candidate from the dropdown before booking')
         return
       }
 
+      const candidate = filteredCandidates.find(c => c.id === Number(selectedCandidateId))
       if (!candidate) {
-        setError('Candidate not found')
+        setError('Selected candidate not found')
         return
       }
 
-      if (!pendingBooking) {
-        setError('No booking pending')
-        return
-      }
-
-      const { panelId, slot } = pendingBooking
       const panel = matchedPanels.find((p) => p.interviewerProfileId === panelId)
       if (!panel) {
         setError('Panel not found')
@@ -318,14 +281,19 @@ export const HRDashboard: React.FC = () => {
         setError('No availability slot selected')
         return
       }
+
       setError(null)
       setIsBooking(true)
 
       try {
+        if (!selectedInterviewTypeId) {
+          setError('Interview level not selected')
+          setIsBooking(false)
+          return
+        }
 
-        // Find interview type
-        const interviewType = interviewTypes.find(t => t.name.includes(interviewLevel))
-        if (!interviewType) {
+        const selectedInterviewType = interviewTypes.find(t => t.id === Number(selectedInterviewTypeId))
+        if (!selectedInterviewType) {
           setError('Interview type not found')
           setIsBooking(false)
           return
@@ -337,16 +305,24 @@ export const HRDashboard: React.FC = () => {
           .filter((id): id is number => id !== undefined)
 
         // Create interview
+        // Get HR user ID from auth context (user.id is a string, convert to number if needed)
+        const hrUserId = user?.id ? parseInt(user.id) : undefined
+        
         const interview = await apiService.createInterview({
           interviewerProfileId: panelId,
           intervieweeId: candidate.id,
-          interviewTypeId: interviewType.id,
+          interviewTypeId: Number(selectedInterviewTypeId),
           scheduledDate: selectedSlot.date,
           startTime: selectedSlot.startTime,
           endTime: selectedSlot.endTime,
           primarySkillIds,
           secondarySkillIds: [],
+          createdByUserId: hrUserId,
         })
+
+        // Extract level from interview type name (e.g., "L1 - Initial Screening" -> "L1")
+        const levelMatch = selectedInterviewType.name.match(/^(L\d+)/)
+        const level = levelMatch ? levelMatch[1] : selectedInterviewType.name
 
         // Add to scheduled interviews list
         const newInterview: ScheduledInterview = {
@@ -354,7 +330,7 @@ export const HRDashboard: React.FC = () => {
           candidateName: candidate.name,
           candidateEmail: candidate.email,
           panelName: panel.name,
-          level: interviewLevel,
+          level: level,
           date: selectedSlot.date,
           startTime: selectedSlot.startTime,
           endTime: selectedSlot.endTime,
@@ -366,17 +342,14 @@ export const HRDashboard: React.FC = () => {
 
         setScheduledInterviews((prev) => [...prev, newInterview])
         
-        // Close modal and reset
-        setIsBookingModalOpen(false)
-        setPendingBooking(null)
-        setBookingCandidateName('')
-        setBookingCandidateEmail('')
+        // Reset form after successful booking
         setSelectedSkills([])
         setInterviewDate('')
         setInterviewTime('')
         setMatchedPanels([])
         setSelectedCandidateId('')
         setSelectedPositionId('')
+        setSelectedInterviewTypeId('')
       } catch (err: any) {
         setError('Failed to schedule interview: ' + (err.response?.data?.message || err.message || 'Unknown error'))
       } finally {
@@ -384,18 +357,13 @@ export const HRDashboard: React.FC = () => {
       }
     },
     [
-      bookingCandidateName,
-      bookingCandidateEmail,
       selectedCandidateId,
-      selectedPositionId,
       filteredCandidates,
-      pendingBooking,
-      selectedSkills,
-      interviewLevel,
       matchedPanels,
+      selectedSkills,
+      selectedInterviewTypeId,
       availableSkills,
       interviewTypes,
-      interviewees,
     ]
   )
 
@@ -538,7 +506,10 @@ export const HRDashboard: React.FC = () => {
                     <select
                       value={selectedCandidateId}
                       onChange={(e) => setSelectedCandidateId(e.target.value ? Number(e.target.value) : '')}
-                      style={styles.select}
+                      style={{
+                        ...styles.select,
+                        ...(!selectedPositionId ? { opacity: 0.6, cursor: 'not-allowed' } : {})
+                      }}
                       className="input-focus"
                       disabled={!selectedPositionId}
                     >
@@ -557,15 +528,19 @@ export const HRDashboard: React.FC = () => {
                       Interview Level <span style={styles.required}>*</span>
                     </label>
                     <select
-                      value={interviewLevel}
+                      value={selectedInterviewTypeId}
                       onChange={(e) =>
-                        setInterviewLevel(e.target.value as InterviewLevel)
+                        setSelectedInterviewTypeId(e.target.value ? Number(e.target.value) : '')
                       }
                       style={styles.select}
                       className="input-focus"
                     >
-                      <option value="L1">L1</option>
-                      <option value="L2">L2</option>
+                      <option value="">Select interview level</option>
+                      {interviewTypes.map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div style={styles.formGroup}>
@@ -745,8 +720,9 @@ export const HRDashboard: React.FC = () => {
                                 onClick={() => handleBookInterview(panel.interviewerProfileId, panel.availabilitySlots?.[0])}
                                 style={styles.bookButton}
                                 className="button-hover"
+                                disabled={!selectedCandidateId || isBooking}
                               >
-                                Book
+                                {isBooking ? 'Booking...' : 'Book'}
                               </button>
                             ) : (
                               <div style={styles.bookButtonsContainer}>
@@ -756,8 +732,9 @@ export const HRDashboard: React.FC = () => {
                                     onClick={() => handleBookInterview(panel.interviewerProfileId, slot)}
                                     style={styles.bookSlotButton}
                                     className="button-hover"
+                                    disabled={!selectedCandidateId || isBooking}
                                   >
-                                    Book {formatDate(slot.date).split(',')[0]} {slot.startTime}
+                                    {isBooking ? 'Booking...' : `Book ${formatDate(slot.date).split(',')[0]} ${slot.startTime}`}
                                   </button>
                                 ))}
                               </div>
@@ -771,74 +748,6 @@ export const HRDashboard: React.FC = () => {
               </section>
             )}
 
-            {/* Booking Modal */}
-            {isBookingModalOpen && (
-              <div style={styles.modalOverlay} onClick={() => !isBooking && setIsBookingModalOpen(false)}>
-                <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-                  <div style={styles.modalHeader}>
-                    <h2 style={styles.modalTitle}>Book Interview</h2>
-                    {!isBooking && (
-                      <button
-                        onClick={() => setIsBookingModalOpen(false)}
-                        style={styles.modalCloseButton}
-                        aria-label="Close modal"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                  <div style={styles.modalBody}>
-                    <div style={styles.formGroup}>
-                      <label style={styles.label}>
-                        Candidate Name <span style={styles.required}>*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={bookingCandidateName}
-                        onChange={(e) => setBookingCandidateName(e.target.value)}
-                        placeholder="Enter candidate name"
-                        style={styles.input}
-                        className="input-focus"
-                        disabled={isBooking}
-                      />
-                    </div>
-                    <div style={styles.formGroup}>
-                      <label style={styles.label}>
-                        Candidate Email <span style={styles.required}>*</span>
-                      </label>
-                      <input
-                        type="email"
-                        value={bookingCandidateEmail}
-                        onChange={(e) => setBookingCandidateEmail(e.target.value)}
-                        placeholder="Enter candidate email"
-                        style={styles.input}
-                        className="input-focus"
-                        disabled={isBooking}
-                      />
-                    </div>
-                  </div>
-                  <div style={styles.modalFooter}>
-                    {!isBooking && (
-                      <button
-                        onClick={() => setIsBookingModalOpen(false)}
-                        style={styles.modalCancelButton}
-                        className="button-hover"
-                      >
-                        Cancel
-                      </button>
-                    )}
-                    <button
-                      onClick={handleConfirmBooking}
-                      style={styles.modalConfirmButton}
-                      className="button-hover"
-                      disabled={isBooking || (!selectedCandidateId && (!bookingCandidateName || !bookingCandidateEmail))}
-                    >
-                      {isBooking ? 'Booking...' : 'Confirm Booking'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Scheduled Interviews */}
             <section style={styles.section} className="fade-in-up">
