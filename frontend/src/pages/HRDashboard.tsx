@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T16:13:16Z
+// AIModified:2026-01-11T19:25:50Z
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -12,6 +12,7 @@ import type {
   InterviewType,
   Interviewee,
   OpenPosition,
+  InterviewerStats,
 } from '@/types'
 import { formatDate, getMinDateTime, isFutureDateTime } from '@/utils/dateUtils'
 
@@ -60,6 +61,7 @@ export const HRDashboard: React.FC = () => {
   const [isLoadingInterviews, setIsLoadingInterviews] = useState(false)
   const [showChangePassword, setShowChangePassword] = useState(false)
 
+
   // Load skills and interview types on mount - use ref to prevent double calls in StrictMode
   const hasLoadedInitialData = useRef(false)
   useEffect(() => {
@@ -107,12 +109,13 @@ export const HRDashboard: React.FC = () => {
         })
         const formattedInterviews: ScheduledInterview[] = activeInterviews.map((interview: any) => ({
           id: interview.id,
+          positionTitle: interview.positionTitle || null,
           candidateName: interview.candidateName,
           candidateEmail: interview.candidateEmail,
           panelName: interview.panelName,
           panelEmail: interview.panelEmail,
-          level: interview.level,
-          date: interview.scheduledDate,
+          level: interview.level, // Now contains InterviewType.Name (e.g., "L1 - Initial Screening")
+          date: interview.date || interview.scheduledDate,
           startTime: interview.startTime,
           endTime: interview.endTime,
           skills: interview.skills || [],
@@ -129,6 +132,7 @@ export const HRDashboard: React.FC = () => {
     }
     loadScheduledInterviews()
   }, [])
+
 
   // Close skill dropdown when clicking outside
   useEffect(() => {
@@ -329,17 +333,22 @@ export const HRDashboard: React.FC = () => {
           createdByUserId: hrUserId,
         })
 
-        // Extract level from interview type name (e.g., "L1 - Initial Screening" -> "L1")
-        const levelMatch = selectedInterviewType.name.match(/^(L\d+)/)
-        const level = levelMatch ? levelMatch[1] : selectedInterviewType.name
+        // Use the full interview type name for level (e.g., "L1 - Initial Screening")
+        const level = selectedInterviewType.name
+
+        // Get position title for the candidate
+        const positionTitle = candidate.positionId 
+          ? positions.find(p => p.id === candidate.positionId)?.title || null
+          : null
 
         // Add to scheduled interviews list
         const newInterview: ScheduledInterview = {
           id: interview.id,
+          positionTitle: positionTitle,
           candidateName: candidate.name,
           candidateEmail: candidate.email,
           panelName: panel.name,
-          level: level,
+          level: level, // Full InterviewType.Name (e.g., "L1 - Initial Screening")
           date: selectedSlot.date,
           startTime: selectedSlot.startTime,
           endTime: selectedSlot.endTime,
@@ -388,12 +397,13 @@ export const HRDashboard: React.FC = () => {
       })
       const formattedInterviews: ScheduledInterview[] = activeInterviews.map((interview: any) => ({
         id: interview.id,
+        positionTitle: interview.positionTitle || null,
         candidateName: interview.candidateName,
         candidateEmail: interview.candidateEmail,
         panelName: interview.panelName,
         panelEmail: interview.panelEmail,
-        level: interview.level,
-        date: interview.scheduledDate,
+        level: interview.level, // Now contains InterviewType.Name (e.g., "L1 - Initial Screening")
+        date: interview.date || interview.scheduledDate,
         startTime: interview.startTime,
         endTime: interview.endTime,
         skills: interview.skills || [],
@@ -480,6 +490,14 @@ export const HRDashboard: React.FC = () => {
               <div style={styles.navItemActive}>
                 <span style={styles.navIcon}>🏠</span>
                 <span>Home</span>
+              </div>
+              <div
+                style={styles.navItem}
+                onClick={() => navigate('/interviewers')}
+                className="nav-item-hover"
+              >
+                <span style={styles.navIcon}>👥</span>
+                <span style={styles.navItemText}>Interviewers</span>
               </div>
             </div>
           </nav>
@@ -838,6 +856,7 @@ export const HRDashboard: React.FC = () => {
                   <table style={styles.table}>
                     <thead>
                       <tr>
+                        <th style={styles.tableHeader}>Open Position</th>
                         <th style={styles.tableHeader}>Candidate</th>
                         <th style={styles.tableHeader}>Panel</th>
                         <th style={styles.tableHeader}>Level</th>
@@ -862,6 +881,11 @@ export const HRDashboard: React.FC = () => {
                             e.currentTarget.style.backgroundColor = 'transparent'
                           }}
                         >
+                          <td style={styles.tableCell}>
+                            <span style={styles.positionBadge}>
+                              {interview.positionTitle || 'N/A'}
+                            </span>
+                          </td>
                           <td style={styles.tableCell}>
                             <div>
                               <div style={styles.candidateName}>
@@ -1098,6 +1122,24 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontWeight: '500',
     position: 'relative',
     borderLeft: '3px solid #E91E63',
+  },
+  navItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    padding: '0.75rem',
+    borderRadius: '4px',
+    color: textDark,
+    marginBottom: '0.5rem',
+    fontSize: '0.875rem',
+    fontWeight: '500',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+    backgroundColor: white,
+  },
+  navItemText: {
+    color: textDark,
+    fontWeight: '500',
   },
   navIcon: {
     fontSize: '1rem',
@@ -1534,6 +1576,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     cursor: 'pointer',
     transition: 'background-color 0.2s, transform 0.1s',
   },
+<<<<<<< HEAD
   card: {
     backgroundColor: white,
     padding: '1.75rem',
@@ -1590,5 +1633,51 @@ const styles: { [key: string]: React.CSSProperties } = {
     cursor: 'pointer',
     transition: 'all 0.2s',
     boxShadow: '0 2px 4px rgba(74, 30, 71, 0.2)',
+  },
+  positionBadge: {
+    padding: '0.25rem 0.75rem',
+    backgroundColor: '#e8f4f8',
+    color: '#0066cc',
+    borderRadius: '12px',
+    fontSize: '0.75rem',
+    fontWeight: '600',
+  },
+  experienceBadge: {
+    padding: '0.25rem 0.75rem',
+    backgroundColor: '#f0f8e8',
+    color: '#006600',
+    borderRadius: '12px',
+    fontSize: '0.75rem',
+    fontWeight: '500',
+  },
+  countBadge: {
+    padding: '0.25rem 0.75rem',
+    backgroundColor: primaryPurple,
+    color: white,
+    borderRadius: '12px',
+    fontSize: '0.875rem',
+    fontWeight: '600',
+    display: 'inline-block',
+  },
+  loadingContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '2rem',
+    gap: '1rem',
+  },
+  loader: {
+    border: '4px solid rgba(0, 0, 0, 0.1)',
+    borderLeftColor: primaryPurple,
+    borderRadius: '50%',
+    width: '36px',
+    height: '36px',
+    animation: 'spin 1s linear infinite',
+  },
+  loadingText: {
+    fontSize: '1rem',
+    color: textLight,
+    fontWeight: '500',
   },
 }

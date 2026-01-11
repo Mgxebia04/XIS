@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T17:32:40Z
+// AIModified:2026-01-11T19:25:50Z
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -61,8 +61,10 @@ public class ScheduleController : ControllerBase
         // Load interviews with necessary includes, then project to DTO to avoid circular references
         var interviews = await _context.Interviews
             .Include(i => i.Interviewee)
+                .ThenInclude(e => e.Position) // Include Position for Open Position
             .Include(i => i.InterviewerProfile)
                 .ThenInclude(p => p.User)
+            .Include(i => i.InterviewType) // Include InterviewType for Level
             .Include(i => i.InterviewRequirements)
                 .ThenInclude(r => r.Skill)
             .OrderBy(i => i.ScheduledDate)
@@ -73,11 +75,12 @@ public class ScheduleController : ControllerBase
         var result = interviews.Select(i => new ScheduledInterviewDto
         {
             Id = i.Id,
+            PositionTitle = i.Interviewee.Position != null ? i.Interviewee.Position.Title : null,
             CandidateName = i.Interviewee.Name,
             CandidateEmail = i.Interviewee.Email,
             PanelName = i.InterviewerProfile.User.Name ?? "Unknown",
             PanelEmail = i.InterviewerProfile.User.Email,
-            Level = i.InterviewerProfile.Level,
+            Level = i.InterviewType.Name, // Use InterviewType.Name instead of InterviewerProfile.Level
             ScheduledDate = i.ScheduledDate,
             StartTime = i.StartTime,
             EndTime = i.EndTime,

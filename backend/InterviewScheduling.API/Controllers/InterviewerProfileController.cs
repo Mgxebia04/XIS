@@ -1,4 +1,5 @@
-// AIModified:2026-01-11T05:42:58Z
+// AIModified:2026-01-11T19:25:50Z
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using InterviewScheduling.API.Data;
@@ -18,6 +19,29 @@ public class InterviewerProfileController : ControllerBase
     {
         _context = context;
         _logger = logger;
+    }
+
+    [HttpGet("all-with-stats")]
+    [AllowAnonymous]
+    public async Task<ActionResult<List<InterviewerStatsDto>>> GetAllInterviewersWithStats()
+    {
+        var interviewers = await _context.InterviewerProfiles
+            .Include(p => p.User)
+            .Select(p => new InterviewerStatsDto
+            {
+                InterviewerProfileId = p.Id,
+                Name = p.User.Name ?? "Unknown",
+                Email = p.User.Email,
+                Experience = p.Experience ?? "Not specified",
+                Level = p.Level ?? "Not specified",
+                TotalCompletedInterviews = _context.Interviews
+                    .Count(i => i.InterviewerProfileId == p.Id && i.Status == "Completed")
+            })
+            .OrderByDescending(i => i.TotalCompletedInterviews)
+            .ThenBy(i => i.Name)
+            .ToListAsync();
+
+        return Ok(interviewers);
     }
 
     [HttpGet("{id}")]
