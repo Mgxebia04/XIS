@@ -7,11 +7,10 @@ import type {
   Skill,
   MatchedPanel,
   ScheduledInterview,
-  AvailabilitySlot,
+  AvailableTimeSlot,
   InterviewType,
   Interviewee,
   OpenPosition,
-  InterviewerStats,
 } from '@/types'
 import { formatDate, getMinDateTime, isFutureDateTime } from '@/utils/dateUtils'
 
@@ -220,19 +219,10 @@ export const HRDashboard: React.FC = () => {
           ? Math.round((matchedSkills.length / selectedSkillNames.length) * 100)
           : 0
 
-        // Convert availableTimeSlots to AvailabilitySlot format
-        const availabilitySlots: AvailabilitySlot[] = panel.availableTimeSlots.map((slot, idx) => ({
-          id: idx,
-          date: slot.date,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-        }))
-
         return {
           ...panel,
           matchPercentage,
           matchedSkills,
-          availabilitySlots,
         }
       })
 
@@ -260,7 +250,7 @@ export const HRDashboard: React.FC = () => {
 
   // Handle booking directly using selected candidate
   const handleBookInterview = useCallback(
-    async (panelId: number, slot?: AvailabilitySlot) => {
+    async (panelId: number, slot?: AvailableTimeSlot) => {
       // Validate that a candidate is selected
       if (!selectedCandidateId) {
         setError('Please select a candidate from the dropdown before booking')
@@ -280,7 +270,7 @@ export const HRDashboard: React.FC = () => {
       }
 
       // Use provided slot or first available slot
-      const selectedSlot = slot || panel.availabilitySlots?.[0]
+      const selectedSlot = slot || panel.availableTimeSlots?.[0]
       if (!selectedSlot) {
         setError('No availability slot selected')
         return
@@ -725,7 +715,7 @@ export const HRDashboard: React.FC = () => {
                           </td>
                           <td style={styles.tableCell}>
                             <div style={styles.slotsContainer}>
-                              {panel.availabilitySlots.map((slot, idx) => (
+                              {panel.availableTimeSlots.map((slot, idx) => (
                                 <div key={idx} style={styles.slotBadge}>
                                   {formatDate(slot.date)} • {slot.startTime} - {slot.endTime}
                                 </div>
@@ -733,9 +723,9 @@ export const HRDashboard: React.FC = () => {
                             </div>
                           </td>
                           <td style={styles.tableCell}>
-                            {panel.availabilitySlots.length === 1 ? (
+                            {panel.availableTimeSlots.length === 1 ? (
                               <button
-                                onClick={() => handleBookInterview(panel.interviewerProfileId, panel.availabilitySlots?.[0])}
+                                onClick={() => handleBookInterview(panel.interviewerProfileId, panel.availableTimeSlots?.[0])}
                                 style={styles.bookButton}
                                 className="button-hover"
                                 disabled={!selectedCandidateId || isBooking}
@@ -744,7 +734,7 @@ export const HRDashboard: React.FC = () => {
                               </button>
                             ) : (
                               <div style={styles.bookButtonsContainer}>
-                                {panel.availabilitySlots.map((slot, idx) => (
+                                {panel.availableTimeSlots.map((slot, idx) => (
                                   <button
                                     key={idx}
                                     onClick={() => handleBookInterview(panel.interviewerProfileId, slot)}
