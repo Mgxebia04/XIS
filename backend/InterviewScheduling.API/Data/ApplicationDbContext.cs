@@ -20,6 +20,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Interview> Interviews { get; set; }
     public DbSet<InterviewType> InterviewTypes { get; set; }
     public DbSet<InterviewRequirement> InterviewRequirements { get; set; }
+    public DbSet<OpenPosition> OpenPositions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -79,6 +80,15 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        // OpenPosition configuration
+        modelBuilder.Entity<OpenPosition>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.Property(e => e.Department).HasMaxLength(100);
+        });
+
         // Interviewee configuration
         modelBuilder.Entity<Interviewee>(entity =>
         {
@@ -86,6 +96,11 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
             entity.Property(e => e.Email).IsRequired().HasMaxLength(255);
             entity.HasIndex(e => e.Email);
+            entity.HasOne(e => e.Position)
+                .WithMany(e => e.Interviewees)
+                .HasForeignKey(e => e.PositionId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(e => e.PositionId);
         });
 
         // InterviewType configuration

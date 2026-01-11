@@ -10,6 +10,7 @@ import type {
   MatchedPanel,
   InterviewType,
   Interviewee,
+  OpenPosition,
   InterviewScheduleDto,
 } from '@/types'
 
@@ -109,9 +110,16 @@ class ApiService {
     return response.data
   }
 
+  // Positions API
+  async getPositions(): Promise<OpenPosition[]> {
+    const response = await this.client.get<OpenPosition[]>('/api/positions')
+    return response.data
+  }
+
   // Interviewees API
-  async getInterviewees(): Promise<Interviewee[]> {
-    const response = await this.client.get<Interviewee[]>('/api/interviewees')
+  async getInterviewees(positionId?: number): Promise<Interviewee[]> {
+    const params = positionId ? { positionId } : {}
+    const response = await this.client.get<Interviewee[]>('/api/interviewees', { params })
     return response.data
   }
 
@@ -200,12 +208,16 @@ class ApiService {
     secondarySkillIds?: number[]
     interviewTypeId?: number
     interviewDate?: string
+    positionId?: number
+    intervieweeId?: number
   }): Promise<MatchedPanel[]> {
     const response = await this.client.post<any[]>('/api/schedule/search', {
       primarySkillIds: searchParams.primarySkillIds || [],
       secondarySkillIds: searchParams.secondarySkillIds || [],
       interviewTypeId: searchParams.interviewTypeId,
       interviewDate: searchParams.interviewDate ? new Date(searchParams.interviewDate).toISOString() : null,
+      positionId: searchParams.positionId,
+      intervieweeId: searchParams.intervieweeId,
     })
     return response.data.map(panel => ({
       ...panel,

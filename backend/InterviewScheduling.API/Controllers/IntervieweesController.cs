@@ -20,9 +20,17 @@ public class IntervieweesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<Interviewee>>> GetAllInterviewees()
+    public async Task<ActionResult<List<Interviewee>>> GetAllInterviewees([FromQuery] int? positionId = null)
     {
-        var interviewees = await _context.Interviewees
+        var query = _context.Interviewees.AsQueryable();
+        
+        // Filter by position if provided
+        if (positionId.HasValue)
+        {
+            query = query.Where(i => i.PositionId == positionId.Value);
+        }
+        
+        var interviewees = await query
             .OrderBy(i => i.Name)
             .ToListAsync();
 

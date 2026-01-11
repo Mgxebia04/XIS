@@ -11,6 +11,7 @@ import type {
   AvailabilitySlot,
   InterviewType,
   Interviewee,
+  OpenPosition,
 } from '@/types'
 import { formatDate, getMinDateTime, isFutureDateTime } from '@/utils/dateUtils'
 
@@ -18,7 +19,9 @@ export const HRDashboard: React.FC = () => {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  // Form state (candidate name/email removed from search form)
+  // Form state
+  const [selectedPositionId, setSelectedPositionId] = useState<number | ''>('')
+  const [selectedCandidateId, setSelectedCandidateId] = useState<number | ''>('')
   const [interviewLevel, setInterviewLevel] = useState<InterviewLevel>('L1')
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
   const [interviewDate, setInterviewDate] = useState('')
@@ -34,7 +37,9 @@ export const HRDashboard: React.FC = () => {
   // Available skills (from API)
   const [availableSkills, setAvailableSkills] = useState<Skill[]>([])
   const [interviewTypes, setInterviewTypes] = useState<InterviewType[]>([])
+  const [positions, setPositions] = useState<OpenPosition[]>([])
   const [interviewees, setInterviewees] = useState<Interviewee[]>([])
+  const [filteredCandidates, setFilteredCandidates] = useState<Interviewee[]>([])
   const [isLoadingSkills, setIsLoadingSkills] = useState(true)
   const [isSearching, setIsSearching] = useState(false)
 
@@ -61,14 +66,14 @@ export const HRDashboard: React.FC = () => {
     const loadInitialData = async () => {
       try {
         setIsLoadingSkills(true)
-        const [skillsData, typesData, intervieweesData] = await Promise.all([
+        const [skillsData, typesData, positionsData] = await Promise.all([
           apiService.getSkills(),
           apiService.getInterviewTypes(),
-          apiService.getInterviewees(),
+          apiService.getPositions(),
         ])
         setAvailableSkills(skillsData)
         setInterviewTypes(typesData)
-        setInterviewees(intervieweesData)
+        setPositions(positionsData)
       } catch (err: any) {
         setError('Failed to load initial data: ' + (err.message || 'Unknown error'))
         hasLoadedInitialData.current = false // Reset on error to allow retry
@@ -141,6 +146,30 @@ export const HRDashboard: React.FC = () => {
     }
   }, [isSkillDropdownOpen])
 
+  // Load candidates when position changes
+  useEffect(() => {
+    const loadCandidates = async () => {
+      if (!selectedPositionId) {
+        setFilteredCandidates([])
+        setSelectedCandidateId('')
+        return
+      }
+      
+      try {
+        const candidatesData = await apiService.getInterviewees(Number(selectedPositionId))
+        setFilteredCandidates(candidatesData)
+        setInterviewees(candidatesData) // Also update main interviewees list
+        // Reset candidate selection if current selection is not in filtered list
+        if (selectedCandidateId && !candidatesData.find(c => c.id === Number(selectedCandidateId))) {
+          setSelectedCandidateId('')
+        }
+      } catch (err: any) {
+        setError('Failed to load candidates: ' + (err.message || 'Unknown error'))
+      }
+    }
+    loadCandidates()
+  }, [selectedPositionId])
+
   // Memoize min date/time
   const minDateTime = useMemo(() => getMinDateTime(), [])
 
@@ -173,6 +202,8 @@ export const HRDashboard: React.FC = () => {
         secondarySkillIds: [],
         interviewTypeId: interviewType?.id,
         interviewDate: interviewDate || undefined,
+        positionId: selectedPositionId ? Number(selectedPositionId) : undefined,
+        intervieweeId: selectedCandidateId ? Number(selectedCandidateId) : undefined,
       }
 
       const matchedPanelsData = await apiService.searchAvailableInterviewers(searchParams)
@@ -210,7 +241,7 @@ export const HRDashboard: React.FC = () => {
     } finally {
       setIsSearching(false)
     }
-  }, [selectedSkills, interviewDate, interviewTime, interviewLevel, interviewTypes, availableSkills])
+  }, [selectedSkills, interviewDate, interviewTime, interviewLevel, interviewTypes, availableSkills, selectedPositionId, selectedCandidateId])
 
   const handleLogout = useCallback(async () => {
     await logout()
@@ -240,8 +271,32 @@ export const HRDashboard: React.FC = () => {
   // Confirm booking from modal
   const handleConfirmBooking = useCallback(
     async () => {
-      if (!bookingCandidateName || !bookingCandidateEmail) {
-        setError('Please fill in candidate name and email')
+      // Use selected candidate from dropdown if available, otherwise use modal input
+      let candidate: Interviewee | undefined
+      
+      if (selectedCandidateId) {
+        candidate = filteredCandidates.find(c => c.id === Number(selectedCandidateId))
+      } else if (bookingCandidateName && bookingCandidateEmail) {
+        // Fallback to modal input if no candidate selected
+        candidate = interviewees.find(i => i.email === bookingCandidateEmail)
+        if (!candidate) {
+          candidate = await apiService.createInterviewee({
+            name: bookingCandidateName,
+            email: bookingCandidateEmail,
+            positionId: selectedPositionId ? Number(selectedPositionId) : undefined,
+          })
+          setInterviewees(prev => [...prev, candidate!])
+          if (selectedPositionId) {
+            setFilteredCandidates(prev => [...prev, candidate!])
+          }
+        }
+      } else {
+        setError('Please select a candidate or fill in candidate name and email')
+        return
+      }
+
+      if (!candidate) {
+        setError('Candidate not found')
         return
       }
 
@@ -267,15 +322,6 @@ export const HRDashboard: React.FC = () => {
       setIsBooking(true)
 
       try {
-        // Find or create interviewee
-        let interviewee = interviewees.find(i => i.email === bookingCandidateEmail)
-        if (!interviewee) {
-          interviewee = await apiService.createInterviewee({
-            name: bookingCandidateName,
-            email: bookingCandidateEmail,
-          })
-          setInterviewees(prev => [...prev, interviewee!])
-        }
 
         // Find interview type
         const interviewType = interviewTypes.find(t => t.name.includes(interviewLevel))
@@ -293,7 +339,7 @@ export const HRDashboard: React.FC = () => {
         // Create interview
         const interview = await apiService.createInterview({
           interviewerProfileId: panelId,
-          intervieweeId: interviewee.id,
+          intervieweeId: candidate.id,
           interviewTypeId: interviewType.id,
           scheduledDate: selectedSlot.date,
           startTime: selectedSlot.startTime,
@@ -305,8 +351,8 @@ export const HRDashboard: React.FC = () => {
         // Add to scheduled interviews list
         const newInterview: ScheduledInterview = {
           id: interview.id,
-          candidateName: bookingCandidateName,
-          candidateEmail: bookingCandidateEmail,
+          candidateName: candidate.name,
+          candidateEmail: candidate.email,
           panelName: panel.name,
           level: interviewLevel,
           date: selectedSlot.date,
@@ -329,6 +375,8 @@ export const HRDashboard: React.FC = () => {
         setInterviewDate('')
         setInterviewTime('')
         setMatchedPanels([])
+        setSelectedCandidateId('')
+        setSelectedPositionId('')
       } catch (err: any) {
         setError('Failed to schedule interview: ' + (err.response?.data?.message || err.message || 'Unknown error'))
       } finally {
@@ -338,6 +386,9 @@ export const HRDashboard: React.FC = () => {
     [
       bookingCandidateName,
       bookingCandidateEmail,
+      selectedCandidateId,
+      selectedPositionId,
+      filteredCandidates,
       pendingBooking,
       selectedSkills,
       interviewLevel,
@@ -452,6 +503,48 @@ export const HRDashboard: React.FC = () => {
             <section style={styles.section} className="fade-in-up">
               <h2 style={styles.sectionTitle}>Schedule New Interview</h2>
               <div style={styles.formCard} className="fade-in-up">
+                <div style={styles.formRow}>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>
+                      Open Position
+                    </label>
+                    <select
+                      value={selectedPositionId}
+                      onChange={(e) => {
+                        setSelectedPositionId(e.target.value ? Number(e.target.value) : '')
+                        setSelectedCandidateId('') // Reset candidate when position changes
+                      }}
+                      style={styles.select}
+                      className="input-focus"
+                    >
+                      <option value="">Select position</option>
+                      {positions.map((position) => (
+                        <option key={position.id} value={position.id}>
+                          {position.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>
+                      Candidate
+                    </label>
+                    <select
+                      value={selectedCandidateId}
+                      onChange={(e) => setSelectedCandidateId(e.target.value ? Number(e.target.value) : '')}
+                      style={styles.select}
+                      className="input-focus"
+                      disabled={!selectedPositionId}
+                    >
+                      <option value="">Select candidate</option>
+                      {filteredCandidates.map((candidate) => (
+                        <option key={candidate.id} value={candidate.id}>
+                          {candidate.name} ({candidate.email})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 <div style={styles.formRow}>
                   <div style={styles.formGroup}>
                     <label style={styles.label}>
@@ -732,7 +825,7 @@ export const HRDashboard: React.FC = () => {
                       onClick={handleConfirmBooking}
                       style={styles.modalConfirmButton}
                       className="button-hover"
-                      disabled={isBooking || !bookingCandidateName || !bookingCandidateEmail}
+                      disabled={isBooking || (!selectedCandidateId && (!bookingCandidateName || !bookingCandidateEmail))}
                     >
                       {isBooking ? 'Booking...' : 'Confirm Booking'}
                     </button>

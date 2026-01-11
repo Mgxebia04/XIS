@@ -12,5 +12,14 @@
 -- Step 3: Seed Data
 :r 03_SeedData.sql
 
+-- Step 4: Migrate Name and ProfilePictureUrl to Users
+:r 04_MigrateNameAndProfilePictureToUsers.sql
+
+-- Step 5: Add Open Positions
+:r 05_AddOpenPositions.sql
+
+-- Step 6: Seed Positions
+:r 06_SeedPositions.sql
+
 PRINT 'Database setup completed successfully!';
 GO

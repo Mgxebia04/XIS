@@ -68,11 +68,20 @@ export interface InterviewType {
   description?: string
 }
 
+export interface OpenPosition {
+  id: number
+  title: string
+  description?: string
+  department?: string
+  isActive: boolean
+}
+
 export interface Interviewee {
   id: number
   name: string
   email: string
   primarySkill?: string
+  positionId?: number
 }
 
 export interface AvailableTimeSlot {

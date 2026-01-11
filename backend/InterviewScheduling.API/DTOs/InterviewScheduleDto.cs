@@ -36,4 +36,6 @@ public class InterviewSearchDto
     public List<int>? SecondarySkillIds { get; set; }
     public int? InterviewTypeId { get; set; }
     public DateTime? InterviewDate { get; set; }
+    public int? PositionId { get; set; }
+    public int? IntervieweeId { get; set; }
 }
