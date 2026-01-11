@@ -76,8 +76,8 @@ body {
 
 /* Input focus effects */
 .input-focus:focus {
-  border-color: #5F256E !important;
-  box-shadow: 0 0 0 3px rgba(95, 37, 110, 0.1) !important;
+  border-color: #4a1e47 !important;
+  box-shadow: 0 0 0 3px rgba(74, 30, 71, 0.1) !important;
 }
 
 /* Button hover effects */

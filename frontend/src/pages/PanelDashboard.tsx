@@ -397,7 +397,10 @@ export const PanelDashboard: React.FC = () => {
       {/* Header */}
       <header style={styles.header}>
         <div style={styles.headerLeft}>
-          <span style={styles.headerTitle}>XIS - Interview Scheduler</span>
+          <span style={styles.headerTitle}>
+            <span style={styles.headerTitleX}>X</span>
+            <span style={styles.headerTitleText}> Interview Scheduler</span>
+          </span>
         </div>
         <div style={styles.headerRight}>
           <div style={styles.profileContainer}>
@@ -418,7 +421,10 @@ export const PanelDashboard: React.FC = () => {
         {/* Sidebar */}
         <aside style={styles.sidebar}>
           <div style={styles.sidebarHeader}>
-            <span style={styles.sidebarTitle}>Panel Dashboard</span>
+            <span style={styles.sidebarTitle}>
+              <span style={styles.sidebarTitleIcon}>👥</span>
+              Panel Dashboard
+            </span>
           </div>
           <nav style={styles.nav}>
             <div style={styles.navSection}>
@@ -850,7 +856,7 @@ export const PanelDashboard: React.FC = () => {
 }
 
 // Color palette matching the exact design system from image
-const primaryPurple = '#5F256E' // Deep rich purple - primary brand color
+const primaryPurple = '#4a1e47' // Deep rich purple - primary brand color
 const activeSidebarBg = '#F5EEF7' // Very light lavender for active sidebar items
 const white = '#FFFFFF' // Main background white
 const textDark = '#333333' // Primary dark text
@@ -889,6 +895,18 @@ const styles: { [key: string]: React.CSSProperties } = {
   headerTitle: {
     fontSize: '0.875rem',
     fontWeight: '500',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  headerTitleX: {
+    fontSize: '1.5rem',
+    fontWeight: '700',
+    letterSpacing: '-0.02em',
+  },
+  headerTitleText: {
+    fontSize: '0.875rem',
+    fontWeight: '500',
+    marginLeft: '0.25rem',
   },
   headerRight: {
     display: 'flex',
@@ -923,13 +941,23 @@ const styles: { [key: string]: React.CSSProperties } = {
     flexDirection: 'column',
   },
   sidebarHeader: {
-    backgroundColor: primaryPurple,
-    color: white,
+    backgroundColor: white,
+    color: primaryPurple,
     padding: '1.5rem 1rem',
+    borderBottom: `1px solid ${borderGray}`,
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+    position: 'relative',
   },
   sidebarTitle: {
     fontSize: '0.875rem',
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: '0.02em',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+  },
+  sidebarTitleIcon: {
+    fontSize: '1rem',
   },
   nav: {
     flex: 1,
@@ -944,11 +972,13 @@ const styles: { [key: string]: React.CSSProperties } = {
     gap: '0.75rem',
     padding: '0.75rem',
     borderRadius: '4px',
-    backgroundColor: activeSidebarBg,
-    color: primaryPurple,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    color: white,
     marginBottom: '0.5rem',
     fontSize: '0.875rem',
     fontWeight: '500',
+    position: 'relative',
+    borderLeft: '3px solid #E91E63',
   },
   navItemInactive: {
     display: 'flex',
