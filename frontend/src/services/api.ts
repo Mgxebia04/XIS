@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T17:32:40Z
+// AIModified:2026-01-11T19:12:15Z
 import axios, { AxiosInstance, AxiosError } from 'axios'
 import type {
   AuthResponse,
@@ -12,6 +12,8 @@ import type {
   Interviewee,
   OpenPosition,
   InterviewScheduleDto,
+  ScheduledInterview,
+  InterviewerStats,
 } from '@/types'
 
 // Backend URL - matches backend launchSettings.json (http://localhost:5268)
@@ -242,7 +244,7 @@ class ApiService {
     }))
   }
 
-  async getAllScheduledInterviews(): Promise<any[]> {
+  async getAllScheduledInterviews(): Promise<ScheduledInterview[]> {
     const response = await this.client.get<any[]>('/api/schedule/all')
     return response.data.map(interview => {
       // Backend returns ScheduledInterviewDto with camelCase properties (via JSON serialization)
@@ -259,18 +261,24 @@ class ApiService {
       
       return {
         id: interview.id,
+        positionTitle: interview.positionTitle || null,
         candidateName: interview.candidateName || '',
         candidateEmail: interview.candidateEmail || '',
         panelName: interview.panelName || 'Unknown',
         panelEmail: interview.panelEmail || '',
-        level: interview.level || '',
-        scheduledDate: scheduledDateStr,
+        level: interview.level || '', // Now contains InterviewType.Name (e.g., "L1 - Initial Screening")
+        date: scheduledDateStr,
         startTime: this.formatTimeSpan(interview.startTime),
         endTime: this.formatTimeSpan(interview.endTime),
         skills: interview.skills || [],
         status: interview.status || 'SCHEDULED',
       }
     })
+  }
+
+  async getAllInterviewersWithStats(): Promise<InterviewerStats[]> {
+    const response = await this.client.get<InterviewerStats[]>('/api/interviewerprofile/all-with-stats')
+    return response.data
   }
 
   async createInterview(schedule: InterviewScheduleDto): Promise<Interview> {

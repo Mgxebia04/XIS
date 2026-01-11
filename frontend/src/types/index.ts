@@ -106,16 +106,26 @@ export interface MatchedPanel {
 
 export interface ScheduledInterview {
   id: number
+  positionTitle?: string | null // Open Position title
   candidateName: string
   candidateEmail: string
   panelName: string
   panelEmail?: string
-  level: string
+  level: string // Interview Type Name (e.g., "L1 - Initial Screening")
   date: string // ISO date string
   startTime: string // HH:mm format
   endTime: string // HH:mm format
   skills: string[] // Skill names
   status: string
+}
+
+export interface InterviewerStats {
+  interviewerProfileId: number
+  name: string
+  email: string
+  experience: string
+  level: string
+  totalCompletedInterviews: number
 }
 
 export interface InterviewScheduleDto {

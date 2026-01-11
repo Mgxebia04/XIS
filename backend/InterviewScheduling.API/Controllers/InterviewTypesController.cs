@@ -1,4 +1,5 @@
-// AIModified:2026-01-11T05:42:58Z
+// AIModified:2026-01-11T19:25:50Z
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using InterviewScheduling.API.Data;
@@ -20,6 +21,7 @@ public class InterviewTypesController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult<List<InterviewType>>> GetAllInterviewTypes()
     {
         var types = await _context.InterviewTypes

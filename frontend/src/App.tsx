@@ -7,6 +7,7 @@ import { Login } from '@/pages/Login'
 import { Dashboard } from '@/pages/Dashboard'
 import { PanelDashboard } from '@/pages/PanelDashboard'
 import { HRDashboard } from '@/pages/HRDashboard'
+import { Interviewers } from '@/pages/Interviewers'
 import { Unauthorized } from '@/pages/Unauthorized'
 
 function App() {
@@ -36,6 +37,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['HR']}>
                 <HRDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/interviewers"
+            element={
+              <ProtectedRoute allowedRoles={['HR']}>
+                <Interviewers />
               </ProtectedRoute>
             }
           />
