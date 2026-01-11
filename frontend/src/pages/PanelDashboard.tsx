@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import type { Skill, AvailabilitySlot, Interview, SkillType } from '@/types'
+import type { Skill, AvailabilitySlot, Interview } from '@/types'
+import { formatDate, getMinDateTime, isFutureDateTime } from '@/utils/dateUtils'
 
 export const PanelDashboard: React.FC = () => {
   const { user, logout } = useAuth()
@@ -103,92 +104,80 @@ export const PanelDashboard: React.FC = () => {
     endTime: '',
   })
 
-  const handleLogout = async () => {
+  // Memoize min date/time to avoid recalculation on every render
+  const minDateTime = useMemo(() => getMinDateTime(), [])
+
+  // Memoize available skills to add based on search query
+  const availableSkillsToAdd = useMemo(() => {
+    const query = skillSearchQuery.toLowerCase()
+    return allAvailableSkills.filter(
+      (skill) =>
+        !mySkills.find((s) => s.id === skill.id) &&
+        skill.name.toLowerCase().includes(query)
+    )
+  }, [allAvailableSkills, mySkills, skillSearchQuery])
+
+  // Memoize current interviews list based on active tab
+  const currentInterviews = useMemo(() => {
+    return activeTab === 'upcoming' ? upcomingInterviews : pastInterviews
+  }, [activeTab, upcomingInterviews, pastInterviews])
+
+  const handleLogout = useCallback(async () => {
     await logout()
     navigate('/login', { replace: true })
-  }
+  }, [logout, navigate])
 
-  const handleAddSkill = (skill: Skill) => {
-    // Add skill to mySkills if not already present
-    if (!mySkills.find((s) => s.id === skill.id)) {
-      setMySkills([...mySkills, { ...skill, type: 'PRIMARY' }])
-    }
-    setIsAddSkillDropdownOpen(false)
-  }
+  const handleAddSkill = useCallback(
+    (skill: Skill) => {
+      // Add skill to mySkills if not already present
+      if (!mySkills.find((s) => s.id === skill.id)) {
+        setMySkills((prev) => [...prev, { ...skill, type: 'PRIMARY' }])
+      }
+      setIsAddSkillDropdownOpen(false)
+      setSkillSearchQuery('')
+    },
+    [mySkills]
+  )
 
-  const handleDeleteSkill = (skillId: string) => {
-    setMySkills(mySkills.filter((skill) => skill.id !== skillId))
-  }
+  const handleDeleteSkill = useCallback((skillId: string) => {
+    setMySkills((prev) => prev.filter((skill) => skill.id !== skillId))
+  }, [])
 
-  const handleToggleSkillType = (skillId: string) => {
-    setMySkills(
-      mySkills.map((skill) =>
+  const handleToggleSkillType = useCallback((skillId: string) => {
+    setMySkills((prev) =>
+      prev.map((skill) =>
         skill.id === skillId
           ? { ...skill, type: skill.type === 'PRIMARY' ? 'SECONDARY' : 'PRIMARY' }
           : skill
       )
     )
-  }
+  }, [])
 
-  // Get skills available to add (not already in mySkills, filtered by search)
-  const availableSkillsToAdd = allAvailableSkills.filter(
-    (skill) =>
-      !mySkills.find((s) => s.id === skill.id) &&
-      skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase())
-  )
-
-  const handleAddAvailabilitySlot = () => {
+  const handleAddAvailabilitySlot = useCallback(() => {
     if (newSlot.date && newSlot.startTime && newSlot.endTime) {
-      const slotDateTime = new Date(`${newSlot.date}T${newSlot.startTime}`)
-      const now = new Date()
-      
-      // Only allow future timestamps
-      if (slotDateTime > now) {
+      if (isFutureDateTime(newSlot.date, newSlot.startTime)) {
         const slot: AvailabilitySlot = {
           id: Date.now().toString(),
           date: newSlot.date,
           startTime: newSlot.startTime,
           endTime: newSlot.endTime,
         }
-        setAvailabilitySlots([...availabilitySlots, slot])
+        setAvailabilitySlots((prev) => [...prev, slot])
         setNewSlot({ date: '', startTime: '', endTime: '' })
       }
     }
-  }
+  }, [newSlot])
 
-  // Get minimum date/time for availability inputs (current date/time)
-  const getMinDateTime = () => {
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, '0')
-    const day = String(now.getDate()).padStart(2, '0')
-    const hours = String(now.getHours()).padStart(2, '0')
-    const minutes = String(now.getMinutes()).padStart(2, '0')
-    return {
-      date: `${year}-${month}-${day}`,
-      time: `${hours}:${minutes}`,
-    }
-  }
+  const handleRemoveAvailabilitySlot = useCallback((id: string) => {
+    setAvailabilitySlots((prev) => prev.filter((slot) => slot.id !== id))
+  }, [])
 
-  const handleRemoveAvailabilitySlot = (id: string) => {
-    setAvailabilitySlots(availabilitySlots.filter((slot) => slot.id !== id))
-  }
-
-  const handleCancelInterview = (id: string) => {
-    setUpcomingInterviews(
-      upcomingInterviews.filter((interview) => interview.id !== id)
+  const handleCancelInterview = useCallback((id: string) => {
+    setUpcomingInterviews((prev) =>
+      prev.filter((interview) => interview.id !== id)
     )
     // API call would go here
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
+  }, [])
 
   return (
     <div style={styles.container}>
@@ -239,7 +228,7 @@ export const PanelDashboard: React.FC = () => {
 
             {/* Skill Selection Section */}
             <section style={styles.section}>
-              <div style={styles.skillsHeader}>
+              <div style={styles.sectionHeader}>
                 <h2 style={styles.sectionTitle}>My Skills</h2>
                 <div style={styles.addSkillContainer} ref={dropdownRef}>
                   <button
@@ -248,21 +237,22 @@ export const PanelDashboard: React.FC = () => {
                       setSkillSearchQuery('')
                     }}
                     style={styles.addSkillButton}
+                    className="button-hover"
                   >
-                    + Add Skill
+                    <span style={styles.addIcon}>+</span>
+                    Add Skill
                   </button>
                   {isAddSkillDropdownOpen && (
-                    <div style={styles.skillDropdown}>
+                    <div style={styles.skillDropdown} className="fade-in">
                       <div style={styles.skillDropdownHeader}>
+                        <span style={styles.searchIcon}>🔍</span>
                         <input
                           type="text"
                           placeholder="Search skills..."
                           value={skillSearchQuery}
                           onChange={(e) => setSkillSearchQuery(e.target.value)}
-                          style={{
-                            ...styles.skillSearchInput,
-                            ...(skillSearchQuery === '' ? { color: placeholderGray } : {}),
-                          }}
+                          style={styles.skillSearchInput}
+                          className="input-focus"
                           autoFocus
                         />
                       </div>
@@ -272,18 +262,13 @@ export const PanelDashboard: React.FC = () => {
                             <div
                               key={skill.id}
                               onClick={() => handleAddSkill(skill)}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = lightGray
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = 'white'
-                              }}
                               style={{
                                 ...styles.skillDropdownItem,
                                 ...(index === availableSkillsToAdd.length - 1
                                   ? { borderBottom: 'none' }
                                   : {}),
                               }}
+                              className="button-hover"
                             >
                               <span style={styles.skillDropdownItemIcon}>✓</span>
                               <span>{skill.name}</span>
@@ -310,60 +295,64 @@ export const PanelDashboard: React.FC = () => {
                         ...styles.skillCard,
                         animation: `fadeInUp 0.3s ease-out ${index * 0.05}s both`,
                       }}
-                      className="fade-in-up"
+                      className="fade-in-up card-hover"
                     >
-                      <span style={styles.skillName}>{skill.name}</span>
-                      <div style={styles.skillActions}>
-                        <div style={styles.toggleContainer}>
-                          <span style={styles.toggleLabel}>Primary</span>
-                          <label style={styles.toggleSwitch}>
-                            <input
-                              type="checkbox"
-                              checked={skill.type === 'PRIMARY'}
-                              onChange={() => handleToggleSkillType(skill.id)}
-                              style={styles.toggleInput}
-                            />
-                            <span
-                              style={{
-                                ...styles.toggleSlider,
-                                ...(skill.type === 'PRIMARY'
-                                  ? styles.toggleSliderActive
-                                  : {}),
-                              }}
-                            >
+                      <div style={styles.skillCardContent}>
+                        <span style={styles.skillBadge}>{skill.name}</span>
+                        <div style={styles.skillActions}>
+                          <div style={styles.toggleContainer}>
+                            <span style={{
+                              ...styles.toggleLabel,
+                              ...(skill.type === 'PRIMARY' ? styles.toggleLabelActive : {})
+                            }}>Primary</span>
+                            <label style={styles.toggleSwitch}>
+                              <input
+                                type="checkbox"
+                                checked={skill.type === 'PRIMARY'}
+                                onChange={() => handleToggleSkillType(skill.id)}
+                                style={styles.toggleInput}
+                              />
                               <span
                                 style={{
-                                  ...styles.toggleSliderThumb,
+                                  ...styles.toggleSlider,
                                   ...(skill.type === 'PRIMARY'
-                                    ? styles.toggleSliderThumbActive
+                                    ? styles.toggleSliderActive
                                     : {}),
                                 }}
-                              />
-                            </span>
-                          </label>
-                          <span style={styles.toggleLabel}>Secondary</span>
+                              >
+                                <span
+                                  style={{
+                                    ...styles.toggleSliderThumb,
+                                    ...(skill.type === 'PRIMARY'
+                                      ? styles.toggleSliderThumbActive
+                                      : {}),
+                                  }}
+                                />
+                              </span>
+                            </label>
+                            <span style={{
+                              ...styles.toggleLabel,
+                              ...(skill.type === 'SECONDARY' ? styles.toggleLabelActive : {})
+                            }}>Secondary</span>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteSkill(skill.id)}
+                            style={styles.deleteSkillButton}
+                            title="Delete skill"
+                            className="button-hover"
+                          >
+                            <span style={styles.deleteIcon}>✕</span>
+                          </button>
                         </div>
-                        <button
-                          onClick={() => handleDeleteSkill(skill.id)}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#fee'
-                            e.currentTarget.style.transform = 'scale(1.1)'
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'transparent'
-                            e.currentTarget.style.transform = 'scale(1)'
-                          }}
-                          style={styles.deleteSkillButton}
-                          title="Delete skill"
-                          className="button-hover"
-                        >
-                          <span style={styles.deleteIcon}>✕</span>
-                        </button>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p style={styles.emptyMessage}>No skills added yet. Click "Add Skill" to get started.</p>
+                  <div style={styles.emptyStateCard}>
+                    <span style={styles.emptyStateIcon}>💼</span>
+                    <p style={styles.emptyStateTitle}>No skills added yet</p>
+                    <p style={styles.emptyStateMessage}>Click "Add Skill" to get started and showcase your expertise</p>
+                  </div>
                 )}
               </div>
             </section>
@@ -373,63 +362,88 @@ export const PanelDashboard: React.FC = () => {
               <h2 style={styles.sectionTitle}>Availability Slots</h2>
               <div style={styles.availabilityCard}>
                 <div style={styles.availabilityForm}>
-                  <input
-                    type="date"
-                    value={newSlot.date}
-                    min={getMinDateTime().date}
-                    onChange={(e) => setNewSlot({ ...newSlot, date: e.target.value })}
-                    style={styles.dateInput}
-                  />
-                  <input
-                    type="time"
-                    value={newSlot.startTime}
-                    min={
-                      newSlot.date === getMinDateTime().date
-                        ? getMinDateTime().time
-                        : undefined
-                    }
-                    onChange={(e) =>
-                      setNewSlot({ ...newSlot, startTime: e.target.value })
-                    }
-                    style={styles.timeInput}
-                  />
-                  <span style={styles.timeSeparator}>to</span>
-                  <input
-                    type="time"
-                    value={newSlot.endTime}
-                    min={newSlot.startTime || undefined}
-                    onChange={(e) =>
-                      setNewSlot({ ...newSlot, endTime: e.target.value })
-                    }
-                    style={styles.timeInput}
-                  />
+                  <div style={styles.formGroup}>
+                    <label style={styles.formLabel}>📅 Date</label>
+                    <input
+                      type="date"
+                      value={newSlot.date}
+                      min={minDateTime.date}
+                      onChange={(e) => setNewSlot({ ...newSlot, date: e.target.value })}
+                      style={styles.dateInput}
+                      className="input-focus"
+                    />
+                  </div>
+                  <div style={styles.formGroup}>
+                    <label style={styles.formLabel}>🕐 Start Time</label>
+                    <input
+                      type="time"
+                      value={newSlot.startTime}
+                      min={
+                        newSlot.date === minDateTime.date
+                          ? minDateTime.time
+                          : undefined
+                      }
+                      onChange={(e) =>
+                        setNewSlot({ ...newSlot, startTime: e.target.value })
+                      }
+                      style={styles.timeInput}
+                      className="input-focus"
+                    />
+                  </div>
+                  <div style={styles.formGroup}>
+                    <label style={styles.formLabel}>🕐 End Time</label>
+                    <input
+                      type="time"
+                      value={newSlot.endTime}
+                      min={newSlot.startTime || undefined}
+                      onChange={(e) =>
+                        setNewSlot({ ...newSlot, endTime: e.target.value })
+                      }
+                      style={styles.timeInput}
+                      className="input-focus"
+                    />
+                  </div>
                   <button
                     onClick={handleAddAvailabilitySlot}
                     style={styles.addButton}
                     className="button-hover"
+                    disabled={!newSlot.date || !newSlot.startTime || !newSlot.endTime}
                   >
-                    + Add Slot
+                    <span style={styles.addIcon}>+</span>
+                    Add Slot
                   </button>
                 </div>
                 <div style={styles.slotsList}>
-                  {availabilitySlots.map((slot) => (
-                    <div key={slot.id} style={styles.slotItem}>
-                      <div style={styles.slotInfo}>
-                        <span style={styles.slotDate}>{formatDate(slot.date)}</span>
-                        <span style={styles.slotTime}>
-                          {slot.startTime} - {slot.endTime}
-                        </span>
+                  {availabilitySlots.length > 0 ? (
+                    availabilitySlots.map((slot) => (
+                      <div key={slot.id} style={styles.slotItem} className="fade-in-up card-hover">
+                        <div style={styles.slotInfo}>
+                          <div style={styles.slotDateContainer}>
+                            <span style={styles.slotIcon}>📅</span>
+                            <span style={styles.slotDate}>{formatDate(slot.date)}</span>
+                          </div>
+                          <div style={styles.slotTimeContainer}>
+                            <span style={styles.slotTimeIcon}>🕐</span>
+                            <span style={styles.slotTime}>
+                              {slot.startTime} - {slot.endTime}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveAvailabilitySlot(slot.id)}
+                          style={styles.removeButton}
+                          className="button-hover"
+                        >
+                          Remove
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleRemoveAvailabilitySlot(slot.id)}
-                        style={styles.removeButton}
-                      >
-                        Remove
-                      </button>
+                    ))
+                  ) : (
+                    <div style={styles.emptyStateCard}>
+                      <span style={styles.emptyStateIcon}>⏰</span>
+                      <p style={styles.emptyStateTitle}>No availability slots</p>
+                      <p style={styles.emptyStateMessage}>Add your available time slots to start receiving interview requests</p>
                     </div>
-                  ))}
-                  {availabilitySlots.length === 0 && (
-                    <p style={styles.emptyMessage}>No availability slots added</p>
                   )}
                 </div>
               </div>
@@ -462,61 +476,99 @@ export const PanelDashboard: React.FC = () => {
               </div>
 
               <div style={styles.interviewsList}>
-                {(activeTab === 'upcoming' ? upcomingInterviews : pastInterviews).map(
-                  (interview, index) => (
-                    <div
-                      key={interview.id}
-                      style={{
-                        ...styles.interviewCard,
-                        animation: `fadeInUp 0.4s ease-out ${index * 0.1}s both`,
-                      }}
-                      className="fade-in-up"
-                    >
-                      <div style={styles.interviewInfo}>
-                        <h3 style={styles.interviewCandidateName}>
-                          {interview.candidateName}
-                        </h3>
-                        <p style={styles.interviewEmail}>{interview.candidateEmail}</p>
-                        <p style={styles.interviewDate}>
-                          {formatDate(interview.date)} • {interview.startTime} -{' '}
-                          {interview.endTime}
-                        </p>
-                        <div style={styles.interviewSkills}>
-                          {interview.skills.map((skill, idx) => (
-                            <span key={idx} style={styles.skillTag}>
-                              {skill}
-                            </span>
-                          ))}
-                        </div>
-                        {interview.hrName && (
-                          <div style={styles.hrInfo}>
-                            <span style={styles.hrLabel}>Scheduled by:</span>
-                            <span style={styles.hrName}>{interview.hrName}</span>
-                            {interview.hrEmail && (
-                              <span style={styles.hrEmail}>({interview.hrEmail})</span>
+                {currentInterviews.length > 0 ? (
+                  currentInterviews.map(
+                    (interview, index) => (
+                      <div
+                        key={interview.id}
+                        style={{
+                          ...styles.interviewCard,
+                          animation: `fadeInUp 0.4s ease-out ${index * 0.1}s both`,
+                        }}
+                        className="fade-in-up card-hover"
+                      >
+                        <div style={styles.interviewInfo}>
+                          <div style={styles.interviewHeader}>
+                            <div>
+                              <h3 style={styles.interviewCandidateName}>
+                                {interview.candidateName}
+                              </h3>
+                              <p style={styles.interviewEmail}>{interview.candidateEmail}</p>
+                            </div>
+                            {activeTab === 'upcoming' && (
+                              <span style={styles.interviewStatusBadge}>Upcoming</span>
+                            )}
+                            {activeTab === 'history' && (
+                              <span style={{
+                                ...styles.interviewStatusBadge,
+                                ...(interview.status === 'COMPLETED' 
+                                  ? styles.statusCompleted 
+                                  : styles.statusCancelled)
+                              }}>
+                                {interview.status}
+                              </span>
                             )}
                           </div>
+                          <div style={styles.interviewDetails}>
+                            <div style={styles.interviewDetailItem}>
+                              <span style={styles.detailIcon}>📅</span>
+                              <span style={styles.interviewDate}>
+                                {formatDate(interview.date)}
+                              </span>
+                            </div>
+                            <div style={styles.interviewDetailItem}>
+                              <span style={styles.detailIcon}>🕐</span>
+                              <span style={styles.interviewTime}>
+                                {interview.startTime} - {interview.endTime}
+                              </span>
+                            </div>
+                          </div>
+                          <div style={styles.interviewSkills}>
+                            {interview.skills.map((skill, idx) => (
+                              <span key={idx} style={styles.skillTag}>
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                          {interview.hrName && (
+                            <div style={styles.hrInfo}>
+                              <span style={styles.hrIcon}>👤</span>
+                              <div style={styles.hrDetails}>
+                                <span style={styles.hrLabel}>Scheduled by:</span>
+                                <span style={styles.hrName}>{interview.hrName}</span>
+                                {interview.hrEmail && (
+                                  <span style={styles.hrEmail}>({interview.hrEmail})</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {activeTab === 'upcoming' && (
+                          <button
+                            onClick={() => handleCancelInterview(interview.id)}
+                            style={styles.cancelButton}
+                            className="button-hover"
+                          >
+                            Cancel
+                          </button>
                         )}
                       </div>
-                      {activeTab === 'upcoming' && (
-                        <button
-                          onClick={() => handleCancelInterview(interview.id)}
-                          style={styles.cancelButton}
-                          className="button-hover"
-                        >
-                          Cancel
-                        </button>
-                      )}
-                    </div>
+                    )
                   )
-                )}
-                {(activeTab === 'upcoming'
-                  ? upcomingInterviews
-                  : pastInterviews
-                ).length === 0 && (
-                  <p style={styles.emptyMessage}>
-                    No {activeTab === 'upcoming' ? 'upcoming' : 'past'} interviews
-                  </p>
+                ) : (
+                  <div style={styles.emptyStateCard}>
+                    <span style={styles.emptyStateIcon}>
+                      {activeTab === 'upcoming' ? '📋' : '📚'}
+                    </span>
+                    <p style={styles.emptyStateTitle}>
+                      No {activeTab === 'upcoming' ? 'upcoming' : 'past'} interviews
+                    </p>
+                    <p style={styles.emptyStateMessage}>
+                      {activeTab === 'upcoming'
+                        ? "You don't have any scheduled interviews yet"
+                        : 'Your interview history will appear here'}
+                    </p>
+                  </div>
                 )}
               </div>
             </section>
@@ -675,7 +727,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     color: textDark,
     marginBottom: '1.5rem',
   },
-  skillsHeader: {
+  sectionHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -687,18 +739,28 @@ const styles: { [key: string]: React.CSSProperties } = {
     position: 'relative',
   },
   addSkillButton: {
-    padding: '0.5rem 1rem',
+    padding: '0.625rem 1.25rem',
     backgroundColor: primaryPurple,
     color: white,
     border: 'none',
-    borderRadius: '4px',
+    borderRadius: '6px',
     fontSize: '0.875rem',
-    fontWeight: '500',
+    fontWeight: '600',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
-    transition: 'background-color 0.2s, transform 0.1s',
+    transition: 'all 0.2s',
+    boxShadow: '0 2px 4px rgba(95, 37, 110, 0.2)',
+  },
+  addIcon: {
+    fontSize: '1.125rem',
+    fontWeight: 'bold',
+    lineHeight: 1,
+  },
+  searchIcon: {
+    fontSize: '1rem',
+    marginRight: '0.5rem',
   },
   skillDropdown: {
     position: 'absolute',
@@ -720,9 +782,11 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: '0.75rem',
     borderBottom: `1px solid ${borderGray}`,
     backgroundColor: white,
+    display: 'flex',
+    alignItems: 'center',
   },
   skillSearchInput: {
-    width: '100%',
+    flex: 1,
     padding: '0.5rem 0.75rem',
     border: `1px solid ${borderGray}`,
     borderRadius: '6px',
@@ -766,26 +830,32 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   skillsContainer: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
     gap: '1rem',
   },
   skillCard: {
     backgroundColor: white,
-    padding: '1rem',
-    borderRadius: '8px',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)',
+    padding: '1.25rem',
+    borderRadius: '10px',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.1)',
+    border: `1px solid ${borderGray}`,
+    transition: 'all 0.2s',
+    cursor: 'default',
+  },
+  skillCardContent: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    border: `1px solid ${borderGray}`,
     gap: '1rem',
-    transition: 'transform 0.2s, box-shadow 0.2s',
   },
-  skillName: {
-    fontSize: '0.875rem',
-    fontWeight: '500',
-    color: textDark,
-    flex: 1,
+  skillBadge: {
+    fontSize: '0.9375rem',
+    fontWeight: '600',
+    color: primaryPurple,
+    padding: '0.5rem 1rem',
+    backgroundColor: activeSidebarBg,
+    borderRadius: '20px',
+    display: 'inline-block',
   },
   skillActions: {
     display: 'flex',
@@ -801,6 +871,11 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.75rem',
     color: textLight,
     fontWeight: '500',
+    transition: 'color 0.2s',
+  },
+  toggleLabelActive: {
+    color: primaryPurple,
+    fontWeight: '600',
   },
   toggleSwitch: {
     position: 'relative',
@@ -887,47 +962,67 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   availabilityCard: {
     backgroundColor: white,
-    padding: '1.5rem',
-    borderRadius: '8px',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)',
+    padding: '1.75rem',
+    borderRadius: '12px',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.1)',
+    border: `1px solid ${borderGray}`,
   },
   availabilityForm: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: '1rem',
-    marginBottom: '1.5rem',
+    marginBottom: '2rem',
     flexWrap: 'wrap',
+    paddingBottom: '1.5rem',
+    borderBottom: `1px solid ${borderGray}`,
+  },
+  formGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+    flex: 1,
+    minWidth: '150px',
+  },
+  formLabel: {
+    fontSize: '0.75rem',
+    fontWeight: '600',
+    color: textDark,
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
   },
   dateInput: {
-    padding: '0.5rem',
+    padding: '0.625rem 0.75rem',
     border: `1px solid ${borderGray}`,
-    borderRadius: '4px',
+    borderRadius: '6px',
     fontSize: '0.875rem',
     backgroundColor: white,
     color: textDark,
+    transition: 'all 0.2s',
   },
   timeInput: {
-    padding: '0.5rem',
+    padding: '0.625rem 0.75rem',
     border: `1px solid ${borderGray}`,
-    borderRadius: '4px',
+    borderRadius: '6px',
     fontSize: '0.875rem',
     backgroundColor: white,
     color: textDark,
-  },
-  timeSeparator: {
-    fontSize: '0.875rem',
-    color: textLight,
+    transition: 'all 0.2s',
   },
   addButton: {
-    padding: '0.5rem 1rem',
+    padding: '0.625rem 1.25rem',
     backgroundColor: primaryPurple,
     color: white,
     border: 'none',
-    borderRadius: '4px',
+    borderRadius: '6px',
     fontSize: '0.875rem',
-    fontWeight: '500',
+    fontWeight: '600',
     cursor: 'pointer',
-    transition: 'background-color 0.2s, transform 0.1s',
+    transition: 'all 0.2s',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    boxShadow: '0 2px 4px rgba(95, 37, 110, 0.2)',
+    alignSelf: 'flex-end',
   },
   slotsList: {
     display: 'flex',
@@ -938,33 +1033,55 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '0.75rem',
+    padding: '1rem 1.25rem',
     backgroundColor: white,
     border: `1px solid ${borderGray}`,
-    borderRadius: '4px',
+    borderRadius: '8px',
+    transition: 'all 0.2s',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
   },
   slotInfo: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.25rem',
+    gap: '0.5rem',
+  },
+  slotDateContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+  },
+  slotTimeContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+  },
+  slotIcon: {
+    fontSize: '1rem',
+  },
+  slotTimeIcon: {
+    fontSize: '1rem',
   },
   slotDate: {
-    fontSize: '0.875rem',
-    fontWeight: '500',
+    fontSize: '0.9375rem',
+    fontWeight: '600',
     color: textDark,
   },
   slotTime: {
-    fontSize: '0.75rem',
+    fontSize: '0.875rem',
     color: textLight,
+    fontWeight: '500',
   },
   removeButton: {
-    padding: '0.25rem 0.75rem',
+    padding: '0.5rem 1rem',
     backgroundColor: '#dc3545',
     color: 'white',
     border: 'none',
-    borderRadius: '4px',
-    fontSize: '0.75rem',
+    borderRadius: '6px',
+    fontSize: '0.8125rem',
+    fontWeight: '500',
     cursor: 'pointer',
+    transition: 'all 0.2s',
+    boxShadow: '0 1px 3px rgba(220, 53, 69, 0.2)',
   },
   interviewsHeader: {
     display: 'flex',
@@ -1004,32 +1121,76 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   interviewCard: {
     backgroundColor: white,
-    padding: '1.5rem',
-    borderRadius: '8px',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06)',
+    padding: '1.75rem',
+    borderRadius: '12px',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.1)',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    transition: 'transform 0.2s, box-shadow 0.2s',
+    transition: 'all 0.2s',
+    border: `1px solid ${borderGray}`,
+    gap: '1.5rem',
   },
   interviewInfo: {
     flex: 1,
   },
+  interviewHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: '1rem',
+    gap: '1rem',
+  },
   interviewCandidateName: {
-    fontSize: '1.125rem',
-    fontWeight: '600',
+    fontSize: '1.25rem',
+    fontWeight: '700',
     color: textDark,
-    marginBottom: '0.5rem',
+    marginBottom: '0.375rem',
   },
   interviewEmail: {
     fontSize: '0.875rem',
     color: textLight,
-    marginBottom: '0.5rem',
+  },
+  interviewStatusBadge: {
+    padding: '0.375rem 0.75rem',
+    backgroundColor: primaryPurple,
+    color: white,
+    borderRadius: '12px',
+    fontSize: '0.75rem',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    whiteSpace: 'nowrap',
+  },
+  statusCompleted: {
+    backgroundColor: '#10b981',
+  },
+  statusCancelled: {
+    backgroundColor: '#ef4444',
+  },
+  interviewDetails: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+    marginBottom: '1rem',
+  },
+  interviewDetailItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+  },
+  detailIcon: {
+    fontSize: '0.875rem',
   },
   interviewDate: {
     fontSize: '0.875rem',
     color: textDark,
-    marginBottom: '0.75rem',
+    fontWeight: '500',
+  },
+  interviewTime: {
+    fontSize: '0.875rem',
+    color: textDark,
+    fontWeight: '500',
   },
   interviewSkills: {
     display: 'flex',
@@ -1044,15 +1205,17 @@ const styles: { [key: string]: React.CSSProperties } = {
     color: primaryPurple,
   },
   cancelButton: {
-    padding: '0.5rem 1rem',
+    padding: '0.625rem 1.25rem',
     backgroundColor: '#dc3545',
     color: 'white',
     border: 'none',
-    borderRadius: '4px',
+    borderRadius: '6px',
     fontSize: '0.875rem',
-    fontWeight: '500',
+    fontWeight: '600',
     cursor: 'pointer',
-    transition: 'background-color 0.2s, transform 0.1s',
+    transition: 'all 0.2s',
+    boxShadow: '0 2px 4px rgba(220, 53, 69, 0.2)',
+    whiteSpace: 'nowrap',
   },
   emptyMessage: {
     textAlign: 'center',
@@ -1060,24 +1223,62 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: '2rem',
     fontSize: '0.875rem',
   },
+  emptyStateCard: {
+    textAlign: 'center',
+    padding: '3rem 2rem',
+    backgroundColor: white,
+    borderRadius: '12px',
+    border: `2px dashed ${borderGray}`,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.75rem',
+  },
+  emptyStateIcon: {
+    fontSize: '3rem',
+    opacity: 0.5,
+  },
+  emptyStateTitle: {
+    fontSize: '1.125rem',
+    fontWeight: '600',
+    color: textDark,
+    margin: 0,
+  },
+  emptyStateMessage: {
+    fontSize: '0.875rem',
+    color: textLight,
+    margin: 0,
+    maxWidth: '400px',
+  },
   hrInfo: {
-    marginTop: '0.75rem',
-    paddingTop: '0.75rem',
+    marginTop: '1rem',
+    paddingTop: '1rem',
     borderTop: `1px solid ${borderGray}`,
     display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+    gap: '0.75rem',
+  },
+  hrIcon: {
+    fontSize: '1rem',
+    marginTop: '0.125rem',
+  },
+  hrDetails: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.25rem',
+    flex: 1,
   },
   hrLabel: {
     fontSize: '0.75rem',
     color: textLight,
     fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
   },
   hrName: {
-    fontSize: '0.75rem',
+    fontSize: '0.8125rem',
     color: textDark,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   hrEmail: {
     fontSize: '0.75rem',

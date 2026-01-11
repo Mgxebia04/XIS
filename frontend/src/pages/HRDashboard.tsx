@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import type {
@@ -8,6 +8,7 @@ import type {
   ScheduledInterview,
   AvailabilitySlot,
 } from '@/types'
+import { formatDate, getMinDateTime, isFutureDateTime } from '@/utils/dateUtils'
 
 export const HRDashboard: React.FC = () => {
   const { user, logout } = useAuth()
@@ -39,6 +40,7 @@ export const HRDashboard: React.FC = () => {
   const [matchedPanels, setMatchedPanels] = useState<MatchedPanel[]>([])
   const [isSkillDropdownOpen, setIsSkillDropdownOpen] = useState(false)
   const [skillSearchQuery, setSkillSearchQuery] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const skillDropdownRef = useRef<HTMLDivElement>(null)
 
   // Scheduled interviews
@@ -80,12 +82,27 @@ export const HRDashboard: React.FC = () => {
     }
   }, [isSkillDropdownOpen])
 
+  // Memoize min date/time
+  const minDateTime = useMemo(() => getMinDateTime(), [])
+
+  // Memoize filtered skills based on search query
+  const filteredSkills = useMemo(() => {
+    const query = skillSearchQuery.toLowerCase()
+    return availableSkills.filter(
+      (skill) =>
+        skill.name.toLowerCase().includes(query) &&
+        !selectedSkills.includes(skill.id)
+    )
+  }, [availableSkills, skillSearchQuery, selectedSkills])
+
   // Handle form submission to find matching panels
-  const handleSubmitForm = () => {
+  const handleSubmitForm = useCallback(() => {
     if (!candidateName || !candidateEmail || selectedSkills.length === 0) {
-      alert('Please fill in candidate name, email, and select at least one skill')
+      setError('Please fill in candidate name, email, and select at least one skill')
+      setTimeout(() => setError(null), 5000)
       return
     }
+    setError(null)
 
     // Mock API call - will be replaced with actual API
     // This simulates getting matched panels with availability slots
@@ -168,36 +185,44 @@ export const HRDashboard: React.FC = () => {
     
     // Update matched panels - this will trigger re-render
     setMatchedPanels(mockMatchedPanels)
-  }
+  }, [candidateName, candidateEmail, selectedSkills, interviewDate, interviewTime, interviewLevel])
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await logout()
     navigate('/login', { replace: true })
-  }
+  }, [logout, navigate])
 
-  const toggleSkill = (skillId: string) => {
-    if (selectedSkills.includes(skillId)) {
-      setSelectedSkills(selectedSkills.filter((id) => id !== skillId))
-    } else {
-      setSelectedSkills([...selectedSkills, skillId])
-    }
-  }
+  const toggleSkill = useCallback((skillId: string) => {
+    setSelectedSkills((prev) =>
+      prev.includes(skillId)
+        ? prev.filter((id) => id !== skillId)
+        : [...prev, skillId]
+    )
+  }, [])
 
-  const handleBookInterview = (panelId: string, slot?: AvailabilitySlot) => {
-    if (!candidateName || !candidateEmail) {
-      alert('Please fill in candidate name and email')
-      return
-    }
+  const handleBookInterview = useCallback(
+    (panelId: string, slot?: AvailabilitySlot) => {
+      if (!candidateName || !candidateEmail) {
+        setError('Please fill in candidate name and email')
+        setTimeout(() => setError(null), 5000)
+        return
+      }
 
-    const panel = matchedPanels.find((p) => p.id === panelId)
-    if (!panel) return
+      const panel = matchedPanels.find((p) => p.id === panelId)
+      if (!panel) {
+        setError('Panel not found')
+        setTimeout(() => setError(null), 5000)
+        return
+      }
 
-    // Use provided slot or first available slot
-    const selectedSlot = slot || panel.availabilitySlots[0]
-    if (!selectedSlot) {
-      alert('No availability slot selected')
-      return
-    }
+      // Use provided slot or first available slot
+      const selectedSlot = slot || panel.availabilitySlots[0]
+      if (!selectedSlot) {
+        setError('No availability slot selected')
+        setTimeout(() => setError(null), 5000)
+        return
+      }
+      setError(null)
 
     const newInterview: ScheduledInterview = {
       id: Date.now().toString(),
@@ -217,54 +242,57 @@ export const HRDashboard: React.FC = () => {
       hrEmail: user?.email || '',
     }
 
-    setScheduledInterviews([...scheduledInterviews, newInterview])
-    // Reset form
-    setCandidateName('')
-    setCandidateEmail('')
-    setSelectedSkills([])
-    setInterviewDate('')
-    setInterviewTime('')
-    setMatchedPanels([])
-  }
-
-  const handleCancelInterview = (interviewId: string) => {
-    setScheduledInterviews(
-      scheduledInterviews.filter((interview) => interview.id !== interviewId)
-    )
-  }
-
-  const getMinDateTime = () => {
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, '0')
-    const day = String(now.getDate()).padStart(2, '0')
-    const hours = String(now.getHours()).padStart(2, '0')
-    const minutes = String(now.getMinutes()).padStart(2, '0')
-    return {
-      date: `${year}-${month}-${day}`,
-      time: `${hours}:${minutes}`,
-    }
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
-
-  const filteredSkills = availableSkills.filter((skill) =>
-    skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase())
+      setScheduledInterviews((prev) => [...prev, newInterview])
+      // Reset form
+      setCandidateName('')
+      setCandidateEmail('')
+      setSelectedSkills([])
+      setInterviewDate('')
+      setInterviewTime('')
+      setMatchedPanels([])
+    },
+    [
+      candidateName,
+      candidateEmail,
+      selectedSkills,
+      interviewLevel,
+      matchedPanels,
+      user,
+      availableSkills,
+    ]
   )
 
-  const selectedSkillNames = selectedSkills
-    .map((id) => availableSkills.find((s) => s.id === id)?.name)
-    .filter(Boolean)
+  const handleCancelInterview = useCallback((interviewId: string) => {
+    setScheduledInterviews((prev) =>
+      prev.filter((interview) => interview.id !== interviewId)
+    )
+  }, [])
+
+  // Memoize selected skill names
+  const selectedSkillNames = useMemo(
+    () =>
+      selectedSkills
+        .map((id) => availableSkills.find((s) => s.id === id)?.name)
+        .filter((name): name is string => Boolean(name)),
+    [selectedSkills, availableSkills]
+  )
 
   return (
     <div style={styles.container}>
+      {/* Error notification */}
+      {error && (
+        <div style={styles.errorBanner} className="fade-in">
+          <span style={styles.errorIcon}>⚠️</span>
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            style={styles.errorClose}
+            aria-label="Close error"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {/* Header */}
       <header style={styles.header}>
         <div style={styles.headerLeft}>
@@ -429,7 +457,7 @@ export const HRDashboard: React.FC = () => {
                     <input
                       type="date"
                       value={interviewDate}
-                      min={getMinDateTime().date}
+                      min={minDateTime.date}
                       onChange={(e) => setInterviewDate(e.target.value)}
                       style={styles.input}
                       className="input-focus"
@@ -441,8 +469,8 @@ export const HRDashboard: React.FC = () => {
                       type="time"
                       value={interviewTime}
                       min={
-                        interviewDate === getMinDateTime().date
-                          ? getMinDateTime().time
+                        interviewDate === minDateTime.date
+                          ? minDateTime.time
                           : undefined
                       }
                       onChange={(e) => setInterviewTime(e.target.value)}
@@ -1107,5 +1135,31 @@ const styles: { [key: string]: React.CSSProperties } = {
     color: textLight,
     padding: '2rem',
     fontSize: '0.875rem',
+  },
+  errorBanner: {
+    position: 'sticky',
+    top: '3.5rem',
+    zIndex: 40,
+    backgroundColor: '#fee',
+    color: '#dc3545',
+    padding: '0.75rem 1rem',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    borderBottom: '1px solid #fcc',
+    fontSize: '0.875rem',
+  },
+  errorIcon: {
+    fontSize: '1rem',
+  },
+  errorClose: {
+    marginLeft: 'auto',
+    backgroundColor: 'transparent',
+    border: 'none',
+    color: '#dc3545',
+    cursor: 'pointer',
+    fontSize: '1.125rem',
+    padding: '0.25rem',
+    lineHeight: 1,
   },
 }
