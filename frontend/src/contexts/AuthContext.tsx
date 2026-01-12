@@ -45,8 +45,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (storedUser && storedToken) {
       try {
         setUser(JSON.parse(storedUser))
-      } catch (error) {
-        console.error('Failed to parse stored user data:', error)
+      } catch {
         localStorage.removeItem('user')
         localStorage.removeItem('authToken')
       }
@@ -68,8 +67,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = useCallback(async () => {
     try {
       await apiService.logout()
-    } catch (error) {
-      console.error('Logout error:', error)
+    } catch {
+      // Silently handle logout errors
     } finally {
       setUser(null)
       localStorage.removeItem('authToken')

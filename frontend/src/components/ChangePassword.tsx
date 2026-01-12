@@ -60,7 +60,8 @@ export const ChangePassword: React.FC<ChangePasswordProps> = ({ onSuccess, onCan
       <h2 style={styles.title}>Change Password</h2>
       <form onSubmit={handleSubmit} style={styles.form}>
         {error && (
-          <div style={styles.error} className="fade-in">
+          <div style={styles.error} className="notification-enter fade-in-down">
+            <span style={{ marginRight: '0.5rem' }}>⚠️</span>
             {error}
           </div>
         )}
@@ -139,6 +140,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: '12px',
     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.1)',
     border: `1px solid ${borderGray}`,
+    animation: 'fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
   },
   title: {
     fontSize: '1.5rem',
@@ -180,6 +182,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: '4px',
     fontSize: '0.875rem',
     border: '1px solid #fcc',
+    display: 'flex',
+    alignItems: 'center',
   },
   buttonGroup: {
     display: 'flex',
@@ -196,7 +200,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.875rem',
     fontWeight: '500',
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
   },
   submitButton: {
     padding: '0.625rem 1.25rem',
@@ -207,7 +211,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.875rem',
     fontWeight: '600',
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     boxShadow: '0 2px 4px rgba(74, 30, 71, 0.2)',
   },
 }

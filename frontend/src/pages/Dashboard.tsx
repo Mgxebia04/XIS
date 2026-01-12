@@ -7,7 +7,6 @@ export const Dashboard: React.FC = () => {
   const { user, isLoading } = useAuth()
   const navigate = useNavigate()
 
-  // Redirect to role-specific dashboard
   useEffect(() => {
     if (!isLoading && user) {
       if (user.role === 'ADMIN') {
@@ -20,7 +19,6 @@ export const Dashboard: React.FC = () => {
     }
   }, [user, isLoading, navigate])
 
-  // Show loading while redirecting
   return (
     <div style={styles.container}>
       <div style={styles.content}>

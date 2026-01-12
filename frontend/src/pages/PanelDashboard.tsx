@@ -11,9 +11,7 @@ export const PanelDashboard: React.FC = () => {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  // All available skills (from API)
   const [allAvailableSkills, setAllAvailableSkills] = useState<Skill[]>([])
-  // Skills selected by the panel member
   const [mySkills, setMySkills] = useState<Skill[]>([])
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -22,7 +20,6 @@ export const PanelDashboard: React.FC = () => {
   const [skillSearchQuery, setSkillSearchQuery] = useState('')
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -68,13 +65,10 @@ export const PanelDashboard: React.FC = () => {
     endTime: '',
   })
 
-  // Memoize min date/time to avoid recalculation on every render
   const minDateTime = useMemo(() => getMinDateTime(), [])
 
-  // Load profile and data on mount - use ref to prevent double calls in StrictMode
   const hasLoadedData = useRef(false)
   useEffect(() => {
-    // Prevent double calls in React StrictMode
     if (hasLoadedData.current) return
     hasLoadedData.current = true
 
@@ -83,7 +77,7 @@ export const PanelDashboard: React.FC = () => {
         setError('Interviewer profile not found')
         setIsLoadingProfile(false)
         setIsLoadingData(false)
-        hasLoadedData.current = false // Reset on error to allow retry
+        hasLoadedData.current = false
         return
       }
 
@@ -91,7 +85,6 @@ export const PanelDashboard: React.FC = () => {
         setIsLoadingProfile(true)
         setIsLoadingData(true)
         
-        // Load all skills, profile, availability, and interviews in parallel
         const [skillsData, profileData, availabilityData, interviewsData] = await Promise.all([
           apiService.getSkills(),
           apiService.getInterviewerProfile(user.interviewerProfileId),
@@ -101,14 +94,12 @@ export const PanelDashboard: React.FC = () => {
 
         setAllAvailableSkills(skillsData)
         
-        // Set my skills from profile
         const primarySkills = profileData.primarySkills.map(s => ({ ...s, type: 'PRIMARY' as const }))
         const secondarySkills = profileData.secondarySkills.map(s => ({ ...s, type: 'SECONDARY' as const }))
         setMySkills([...primarySkills, ...secondarySkills])
 
         setAvailabilitySlots(availabilityData)
 
-        // Separate upcoming and past interviews based on scheduled date and time
         const now = new Date()
         now.setSeconds(0, 0)
         now.setMilliseconds(0)
@@ -117,7 +108,6 @@ export const PanelDashboard: React.FC = () => {
           if (!i.scheduledDate || !i.startTime) return false
           
           try {
-            // Create date-time from scheduledDate (YYYY-MM-DD) and startTime (HH:mm)
             const [year, month, day] = i.scheduledDate.split('-').map(Number)
             const [hours, minutes] = i.startTime.split(':').map(Number)
             
@@ -126,14 +116,10 @@ export const PanelDashboard: React.FC = () => {
             }
             
             const interviewDateTime = new Date(year, month - 1, day, hours, minutes, 0, 0)
-            
-            // Upcoming: interview is in the future AND status is "Scheduled" (not completed/cancelled)
             const isFuture = interviewDateTime >= now
-            // Only include interviews with status "Scheduled" (case-insensitive check)
             const isActive = i.status?.toUpperCase() === 'SCHEDULED'
             return isFuture && isActive
-          } catch (error) {
-            console.error('Error processing interview:', i, error)
+          } catch {
             return false
           }
         })
@@ -142,7 +128,6 @@ export const PanelDashboard: React.FC = () => {
           if (!i.scheduledDate || !i.startTime) return false
           
           try {
-            // Create date-time from scheduledDate (YYYY-MM-DD) and startTime (HH:mm)
             const [year, month, day] = i.scheduledDate.split('-').map(Number)
             const [hours, minutes] = i.startTime.split(':').map(Number)
             
@@ -151,15 +136,11 @@ export const PanelDashboard: React.FC = () => {
             }
             
             const interviewDateTime = new Date(year, month - 1, day, hours, minutes, 0, 0)
-            
-            // History: interview is in the past OR completed/cancelled
             const isPast = interviewDateTime < now
-            // Check for completed or cancelled status (case-insensitive)
             const statusUpper = i.status?.toUpperCase() || ''
             const isCompletedOrCancelled = statusUpper === 'COMPLETED' || statusUpper === 'CANCELLED'
             return isPast || isCompletedOrCancelled
-          } catch (error) {
-            console.error('Error processing interview:', i, error)
+          } catch {
             return false
           }
         })
@@ -168,7 +149,7 @@ export const PanelDashboard: React.FC = () => {
         setPastInterviews(past)
       } catch (err: any) {
         setError('Failed to load data: ' + (err.message || 'Unknown error'))
-        hasLoadedData.current = false // Reset on error to allow retry
+        hasLoadedData.current = false
       } finally {
         setIsLoadingProfile(false)
         setIsLoadingData(false)
@@ -178,7 +159,6 @@ export const PanelDashboard: React.FC = () => {
     loadData()
   }, [user?.interviewerProfileId])
 
-  // Memoize available skills to add based on search query
   const availableSkillsToAdd = useMemo(() => {
     const query = skillSearchQuery.toLowerCase()
     return allAvailableSkills.filter(
@@ -188,7 +168,6 @@ export const PanelDashboard: React.FC = () => {
     )
   }, [allAvailableSkills, mySkills, skillSearchQuery])
 
-  // Memoize current interviews list based on active tab
   const currentInterviews = useMemo(() => {
     return activeTab === 'upcoming' ? upcomingInterviews : pastInterviews
   }, [activeTab, upcomingInterviews, pastInterviews])
@@ -211,24 +190,21 @@ export const PanelDashboard: React.FC = () => {
       })
     } catch (err: any) {
       setError('Failed to save profile: ' + (err.message || 'Unknown error'))
-      throw err // Re-throw to allow caller to handle
+      throw err
     }
   }, [user?.interviewerProfileId])
 
   const handleAddSkill = useCallback(
     async (skill: Skill) => {
-      // Add skill to mySkills if not already present
       if (!mySkills.find((s) => s.id === skill.id)) {
         const updatedSkills = [...mySkills, { ...skill, type: 'PRIMARY' as const }]
         setMySkills(updatedSkills)
         setIsAddSkillDropdownOpen(false)
         setSkillSearchQuery('')
-        // Save to backend
         try {
           await saveProfile(updatedSkills)
         } catch {
-          // Error already handled in saveProfile
-          setMySkills(mySkills) // Revert on error
+          setMySkills(mySkills)
         }
       }
     },
@@ -239,12 +215,10 @@ export const PanelDashboard: React.FC = () => {
     const updatedSkills = mySkills.filter((skill) => skill.id !== skillId)
     const previousSkills = mySkills
     setMySkills(updatedSkills)
-    // Save to backend
     try {
       await saveProfile(updatedSkills)
     } catch {
-      // Error already handled in saveProfile
-      setMySkills(previousSkills) // Revert on error
+      setMySkills(previousSkills)
     }
   }, [mySkills, saveProfile])
 
@@ -256,12 +230,10 @@ export const PanelDashboard: React.FC = () => {
     )
     const previousSkills = mySkills
     setMySkills(updatedSkills)
-    // Save to backend
     try {
       await saveProfile(updatedSkills)
     } catch {
-      // Error already handled in saveProfile
-      setMySkills(previousSkills) // Revert on error
+      setMySkills(previousSkills)
     }
   }, [mySkills, saveProfile])
 
@@ -272,7 +244,6 @@ export const PanelDashboard: React.FC = () => {
     }
 
     if (newSlot.date && newSlot.startTime && newSlot.endTime) {
-      // Check for duplicate slot in the current list
       const isDuplicate = availabilitySlots.some(slot => {
         const slotDate = new Date(slot.date).toISOString().split('T')[0]
         const newSlotDate = new Date(newSlot.date).toISOString().split('T')[0]
@@ -324,27 +295,18 @@ export const PanelDashboard: React.FC = () => {
   }, [])
 
   const handleConfirmCancel = useCallback(async (interviewId?: number) => {
-    // Use the passed interviewId or fall back to modal state
     const idToCancel = interviewId ?? cancelConfirmModal.interviewId
     if (!idToCancel) {
-      console.error('No interview ID provided or in cancel modal', { interviewId, cancelConfirmModal })
       return
     }
 
-    console.log('Attempting to cancel interview:', idToCancel)
-    
-    // Close modal immediately to prevent UI freeze
     setCancelConfirmModal({ isOpen: false, interviewId: null, candidateName: '' })
 
     try {
-      console.log('Calling cancelInterview API for interview:', idToCancel)
       setIsReloadingInterviews(true)
       await apiService.cancelInterview(idToCancel)
-      console.log('Interview cancelled successfully')
       
-      // Reload interviews to get updated status
       if (user?.interviewerProfileId) {
-        console.log('Reloading interviews for profile:', user.interviewerProfileId)
         const interviewsData = await apiService.getInterviewerSchedule(user.interviewerProfileId)
         const now = new Date()
         now.setSeconds(0, 0)
@@ -362,7 +324,7 @@ export const PanelDashboard: React.FC = () => {
             const isFuture = interviewDateTime >= now
             const isActive = i.status?.toUpperCase() === 'SCHEDULED'
             return isFuture && isActive
-          } catch (error) {
+          } catch {
             return false
           }
         })
@@ -380,17 +342,15 @@ export const PanelDashboard: React.FC = () => {
             const statusUpper = i.status?.toUpperCase() || ''
             const isCompletedOrCancelled = statusUpper === 'COMPLETED' || statusUpper === 'CANCELLED'
             return isPast || isCompletedOrCancelled
-          } catch (error) {
+          } catch {
             return false
           }
         })
         
         setUpcomingInterviews(upcoming)
         setPastInterviews(past)
-        console.log('Interviews reloaded. Upcoming:', upcoming.length, 'Past:', past.length)
       }
     } catch (err: any) {
-      console.error('Error cancelling interview:', err)
       setError('Failed to cancel interview: ' + (err.message || 'Unknown error'))
     } finally {
       setIsReloadingInterviews(false)
@@ -405,26 +365,28 @@ export const PanelDashboard: React.FC = () => {
     <div style={styles.container}>
       {/* Error/Success notification */}
       {error && (
-        <div style={styles.errorBanner} className="fade-in">
+        <div style={styles.errorBanner} className="notification-enter fade-in-down">
           <span style={styles.errorIcon}>⚠️</span>
           <span>{error}</span>
           <button
             onClick={() => setError(null)}
             style={styles.errorClose}
             aria-label="Close error"
+            className="button-hover"
           >
             ✕
           </button>
         </div>
       )}
       {success && (
-        <div style={styles.successBanner} className="fade-in">
+        <div style={styles.successBanner} className="notification-enter fade-in-down">
           <span style={styles.successIcon}>✓</span>
           <span>{success}</span>
           <button
             onClick={() => setSuccess(null)}
             style={styles.errorClose}
             aria-label="Close success"
+            className="button-hover"
           >
             ✕
           </button>
@@ -468,7 +430,6 @@ export const PanelDashboard: React.FC = () => {
                 <span style={styles.navIcon}>🏠</span>
                 <span>Home</span>
               </div>
-              {/* Example inactive items - can be removed or used as template */}
             </div>
           </nav>
         </aside>
@@ -904,16 +865,8 @@ export const PanelDashboard: React.FC = () => {
                   e.preventDefault()
                   e.stopPropagation()
                   const interviewId = cancelConfirmModal.interviewId
-                  console.log('Yes, Cancel Interview button clicked', {
-                    interviewId,
-                    candidateName: cancelConfirmModal.candidateName,
-                    isOpen: cancelConfirmModal.isOpen
-                  })
-                  // Pass interviewId directly to avoid closure issues
                   if (interviewId) {
                     handleConfirmCancel(interviewId)
-                  } else {
-                    console.error('No interview ID available when button clicked')
                   }
                 }}
                 style={styles.modalConfirmButton}
@@ -930,7 +883,6 @@ export const PanelDashboard: React.FC = () => {
   )
 }
 
-// Color palette matching the exact design system from image
 const primaryPurple = '#4a1e47' // Deep rich purple - primary brand color
 const activeSidebarBg = '#F5EEF7' // Very light lavender for active sidebar items
 const white = '#FFFFFF' // Main background white
@@ -1775,6 +1727,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
+    animation: 'fadeIn 0.2s ease-out',
   },
   modalContent: {
     backgroundColor: white,
@@ -1786,6 +1739,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     overflow: 'auto',
     display: 'flex',
     flexDirection: 'column',
+    animation: 'scaleIn 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
   },
   modalHeader: {
     padding: '1.5rem',

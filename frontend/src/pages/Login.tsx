@@ -3,35 +3,69 @@ import React, { useState, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import type { LoginCredentials } from '@/types'
+import { extractErrorMessage, isValidEmail, validateRequired } from '@/utils/errorUtils'
+import { ErrorDisplay } from '@/components/ErrorDisplay'
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const { login, isAuthenticated } = useAuth()
   const navigate = useNavigate()
 
-  // Redirect if already authenticated
   React.useEffect(() => {
     if (isAuthenticated) {
-      // Dashboard component will handle role-based redirection
       navigate('/dashboard', { replace: true })
     }
   }, [isAuthenticated, navigate])
 
+  const validateForm = (): boolean => {
+    let isValid = true
+    setEmailError(null)
+    setPasswordError(null)
+
+    // Validate email
+    const emailValidation = validateRequired(email, 'Email')
+    if (!emailValidation.valid) {
+      setEmailError(emailValidation.message || 'Email is required')
+      isValid = false
+    } else if (!isValidEmail(email)) {
+      setEmailError('Please enter a valid email address')
+      isValid = false
+    }
+
+    // Validate password
+    const passwordValidation = validateRequired(password, 'Password')
+    if (!passwordValidation.valid) {
+      setPasswordError(passwordValidation.message || 'Password is required')
+      isValid = false
+    }
+
+    return isValid
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
+    setEmailError(null)
+    setPasswordError(null)
+
+    if (!validateForm()) {
+      return
+    }
+
     setIsLoading(true)
 
     try {
-      const credentials: LoginCredentials = { email, password }
+      const credentials: LoginCredentials = { email: email.trim(), password }
       await login(credentials)
-      // After successful login, redirect to dashboard which will route based on role from backend
       navigate('/dashboard', { replace: true })
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed. Please check your credentials and try again.')
+      const errorMessage = extractErrorMessage(err)
+      setError(errorMessage)
     } finally {
       setIsLoading(false)
     }
@@ -51,48 +85,63 @@ export const Login: React.FC = () => {
           <h1 style={styles.title}>Welcome Back</h1>
           <h2 style={styles.subtitle}>Sign In to continue</h2>
           <form onSubmit={handleSubmit} style={styles.form}>
-            {error && (
-              <div style={styles.error} className="fade-in">
-                <span style={styles.errorIcon}>⚠️</span>
-                <span style={styles.errorText}>{error}</span>
-                <button
-                  onClick={() => setError(null)}
-                  style={styles.errorClose}
-                  aria-label="Close error"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
+            <ErrorDisplay error={error} onDismiss={() => setError(null)} />
             <div style={styles.inputGroup}>
               <label htmlFor="email" style={styles.label}>
-                Email
+                Email <span style={styles.required}>*</span>
               </label>
               <input
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                  if (emailError) setEmailError(null)
+                }}
+                onBlur={() => {
+                  if (email && !isValidEmail(email)) {
+                    setEmailError('Please enter a valid email address')
+                  }
+                }}
                 required
-                style={styles.input}
+                style={{
+                  ...styles.input,
+                  ...(emailError ? styles.inputError : {}),
+                }}
                 placeholder="Enter your email"
                 className="input-focus"
               />
+              {emailError && (
+                <span style={styles.fieldError} className="fade-in-down">
+                  {emailError}
+                </span>
+              )}
             </div>
             <div style={styles.inputGroup}>
               <label htmlFor="password" style={styles.label}>
-                Password
+                Password <span style={styles.required}>*</span>
               </label>
               <input
                 id="password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  if (passwordError) setPasswordError(null)
+                }}
                 required
-                style={styles.input}
+                style={{
+                  ...styles.input,
+                  ...(passwordError ? styles.inputError : {}),
+                }}
                 placeholder="Enter your password"
                 className="input-focus"
               />
+              {passwordError && (
+                <span style={styles.fieldError} className="fade-in-down">
+                  {passwordError}
+                </span>
+              )}
             </div>
             <button
               type="submit"
@@ -170,7 +219,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     border: `1px solid ${borderGray}`,
     width: '100%',
     maxWidth: '420px',
-    animation: 'fadeInUp 0.4s ease-out',
+    animation: 'fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
   },
   title: {
     fontSize: '1.75rem',
@@ -201,6 +250,10 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontWeight: '500',
     color: textDark,
   },
+  required: {
+    color: '#dc3545',
+    marginLeft: '0.25rem',
+  },
   input: {
     padding: '0.75rem',
     border: `1px solid ${borderGray}`,
@@ -210,6 +263,16 @@ const styles: { [key: string]: React.CSSProperties } = {
     backgroundColor: white,
     color: textDark,
     transition: 'border-color 0.2s, box-shadow 0.2s',
+  },
+  inputError: {
+    borderColor: '#dc3545',
+    boxShadow: '0 0 0 3px rgba(220, 53, 69, 0.1)',
+  },
+  fieldError: {
+    fontSize: '0.75rem',
+    color: '#dc3545',
+    marginTop: '0.25rem',
+    display: 'block',
   },
   button: {
     padding: '0.75rem',
@@ -221,7 +284,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontWeight: '500',
     cursor: 'pointer',
     marginTop: '0.5rem',
-    transition: 'background-color 0.2s, transform 0.1s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    boxShadow: '0 2px 4px rgba(74, 30, 71, 0.2)',
   },
   error: {
     padding: '0.75rem',
@@ -230,7 +294,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: '4px',
     fontSize: '0.875rem',
     border: '1px solid #fcc',
-    animation: 'shake 0.3s ease-in-out',
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',

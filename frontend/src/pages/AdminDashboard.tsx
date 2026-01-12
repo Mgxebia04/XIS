@@ -38,7 +38,6 @@ export const AdminDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  // Load panel requests on mount
   const hasLoadedRequests = useRef(false)
   useEffect(() => {
     if (hasLoadedRequests.current) return
@@ -170,19 +169,19 @@ export const AdminDashboard: React.FC = () => {
     <div style={styles.container}>
       {/* Error/Success Banner */}
       {error && (
-        <div style={styles.errorBanner} className="fade-in">
+        <div style={styles.errorBanner} className="notification-enter fade-in-down">
           <span style={styles.errorIcon}>⚠️</span>
           <span>{error}</span>
-          <button onClick={() => setError(null)} style={styles.errorClose} aria-label="Close error">
+          <button onClick={() => setError(null)} style={styles.errorClose} className="button-hover" aria-label="Close error">
             ✕
           </button>
         </div>
       )}
       {success && (
-        <div style={styles.successBanner} className="fade-in">
+        <div style={styles.successBanner} className="notification-enter fade-in-down">
           <span style={styles.successIcon}>✓</span>
           <span>{success}</span>
-          <button onClick={() => setSuccess(null)} style={styles.errorClose} aria-label="Close success">
+          <button onClick={() => setSuccess(null)} style={styles.errorClose} className="button-hover" aria-label="Close success">
             ✕
           </button>
         </div>
@@ -602,6 +601,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: '12px',
     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.1)',
     border: `1px solid ${borderGray}`,
+    transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
   },
   formRow: {
     display: 'flex',
@@ -642,7 +642,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.875rem',
     fontWeight: '600',
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
@@ -657,10 +657,11 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.875rem',
     fontWeight: '500',
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
+    boxShadow: '0 2px 4px rgba(74, 30, 71, 0.2)',
   },
   requestsList: {
     display: 'flex',
@@ -677,7 +678,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: '1.5rem',
-    transition: 'all 0.2s',
+    transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
   },
   requestInfo: {
     flex: 1,
@@ -768,7 +769,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.875rem',
     fontWeight: '600',
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)',
   },
   rejectButton: {
@@ -780,7 +781,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.875rem',
     fontWeight: '600',
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     boxShadow: '0 2px 4px rgba(220, 53, 69, 0.2)',
   },
   emptyStateCard: {
@@ -824,7 +825,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     border: '4px solid #f3f3f3',
     borderTop: '4px solid #4a1e47',
     borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
+    animation: 'spin-smooth 0.8s linear infinite',
   },
   loadingText: {
     fontSize: '0.875rem',

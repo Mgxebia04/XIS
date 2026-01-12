@@ -18,11 +18,11 @@ body {
   min-height: 100vh;
 }
 
-/* Subtle animations for enhanced UX */
+/* Enhanced animations for better UX */
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(15px);
   }
   to {
     opacity: 1;
@@ -39,14 +39,25 @@ body {
   }
 }
 
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes shake {
   0%, 100% {
     transform: translateX(0);
   }
-  25% {
+  10%, 30%, 50%, 70%, 90% {
     transform: translateX(-5px);
   }
-  75% {
+  20%, 40%, 60%, 80% {
     transform: translateX(5px);
   }
 }
@@ -54,7 +65,18 @@ body {
 @keyframes slideIn {
   from {
     opacity: 0;
-    transform: translateX(-10px);
+    transform: translateX(-15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(15px);
   }
   to {
     opacity: 1;
@@ -71,47 +93,266 @@ body {
   }
 }
 
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
 .fade-in {
   animation: fadeIn 0.3s ease-out;
 }
 
 .fade-in-up {
-  animation: fadeInUp 0.4s ease-out;
+  animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-in-down {
+  animation: fadeInDown 0.3s ease-out;
 }
 
 .slide-in {
   animation: slideIn 0.3s ease-out;
 }
 
+.slide-in-right {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.scale-in {
+  animation: scaleIn 0.2s ease-out;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
 /* Input focus effects */
 .input-focus:focus {
   border-color: #4a1e47 !important;
   box-shadow: 0 0 0 3px rgba(74, 30, 71, 0.1) !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.input-focus {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 /* Button hover effects */
+.button-hover {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .button-hover:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .button-hover:active:not(:disabled) {
   transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.1s ease;
 }
 
 .button-hover:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
 }
 
 /* Profile image hover effect */
+.profile-image-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
 .profile-image-hover:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
 }
 
 /* Card hover effects */
+.card-hover {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .card-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08) !important;
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12), 0 3px 6px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selection styling */
+::selection {
+  background-color: rgba(74, 30, 71, 0.2);
+  color: #4a1e47;
+}
+
+/* Loading spinner enhancement */
+@keyframes spin-smooth {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  animation: spin-smooth 0.8s linear infinite;
+}
+
+/* Success/Error animations */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 200px;
+  }
+}
+
+.notification-enter {
+  animation: slideDown 0.3s ease-out;
+}
+
+/* Table row hover */
+.table-row-hover {
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+
+.table-row-hover:hover {
+  background-color: #f9f9f9;
+  transform: scale(1.01);
+}
+
+/* Dropdown animations */
+@keyframes dropdownFade {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dropdown-enter {
+  animation: dropdownFade 0.2s ease-out;
+}
+
+/* Modal animations */
+@keyframes modalFade {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-enter {
+  animation: modalFade 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Progress bar animation */
+@keyframes progressBar {
+  from {
+    width: 0%;
+  }
+}
+
+.progress-animated {
+  animation: progressBar 0.6s ease-out;
+}
+
+/* Enhanced Select Dropdown Styling */
+.select-enhanced {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.select-enhanced:hover:not(:disabled) {
+  border-color: #4a1e47;
+  box-shadow: 0 0 0 3px rgba(74, 30, 71, 0.1);
+}
+
+.select-enhanced:focus {
+  border-color: #4a1e47;
+  box-shadow: 0 0 0 3px rgba(74, 30, 71, 0.15);
+  outline: none;
+}
+
+.select-enhanced:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: #f5f5f5;
+}
+
+/* Skill dropdown item hover */
+.skill-dropdown-item-hover:hover {
+  background-color: #F5EEF7 !important;
+  color: #4a1e47;
+}
+
+/* Custom scrollbar for dropdowns */
+.skillDropdownList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.skillDropdownList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.skillDropdownList::-webkit-scrollbar-thumb {
+  background-color: #E0E0E0;
+  border-radius: 3px;
+}
+
+.skillDropdownList::-webkit-scrollbar-thumb:hover {
+  background-color: #b0b0b0;
 }

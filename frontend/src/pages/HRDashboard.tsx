@@ -13,13 +13,14 @@ import type {
   Interviewee,
   OpenPosition,
 } from '@/types'
-import { formatDate, getMinDateTime, isFutureDateTime } from '@/utils/dateUtils'
+import { formatDate, getMinDateTime } from '@/utils/dateUtils'
+import { extractErrorMessage } from '@/utils/errorUtils'
+import { ErrorDisplay, SuccessDisplay } from '@/components/ErrorDisplay'
 
 export const HRDashboard: React.FC = () => {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  // Form state
   const [selectedPositionId, setSelectedPositionId] = useState<number | ''>('')
   const [selectedCandidateId, setSelectedCandidateId] = useState<number | ''>('')
   const [selectedInterviewTypeId, setSelectedInterviewTypeId] = useState<number | ''>('')
@@ -27,19 +28,15 @@ export const HRDashboard: React.FC = () => {
   const [interviewDate, setInterviewDate] = useState('')
   const [interviewTime, setInterviewTime] = useState('')
 
-  // Booking state
   const [isBooking, setIsBooking] = useState(false)
 
-  // Available skills (from API)
   const [availableSkills, setAvailableSkills] = useState<Skill[]>([])
   const [interviewTypes, setInterviewTypes] = useState<InterviewType[]>([])
   const [positions, setPositions] = useState<OpenPosition[]>([])
-  const [interviewees, setInterviewees] = useState<Interviewee[]>([])
   const [filteredCandidates, setFilteredCandidates] = useState<Interviewee[]>([])
   const [isLoadingSkills, setIsLoadingSkills] = useState(true)
   const [isSearching, setIsSearching] = useState(false)
 
-  // Matched panels (mock data - will be replaced with API call)
   const [matchedPanels, setMatchedPanels] = useState<MatchedPanel[]>([])
   const [isSkillDropdownOpen, setIsSkillDropdownOpen] = useState(false)
   const [skillSearchQuery, setSkillSearchQuery] = useState('')
@@ -47,13 +44,11 @@ export const HRDashboard: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null)
   const skillDropdownRef = useRef<HTMLDivElement>(null)
 
-  // Panel Request state
   const [panelRequestName, setPanelRequestName] = useState('')
   const [panelRequestEmail, setPanelRequestEmail] = useState('')
   const [panelRequestNotes, setPanelRequestNotes] = useState('')
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false)
 
-  // Scheduled interviews
   const [scheduledInterviews, setScheduledInterviews] = useState<
     ScheduledInterview[]
   >([])
@@ -61,10 +56,8 @@ export const HRDashboard: React.FC = () => {
   const [showChangePassword, setShowChangePassword] = useState(false)
 
 
-  // Load skills and interview types on mount - use ref to prevent double calls in StrictMode
   const hasLoadedInitialData = useRef(false)
   useEffect(() => {
-    // Prevent double calls in React StrictMode
     if (hasLoadedInitialData.current) return
     hasLoadedInitialData.current = true
 
@@ -80,8 +73,8 @@ export const HRDashboard: React.FC = () => {
         setInterviewTypes(typesData)
         setPositions(positionsData)
       } catch (err: any) {
-        setError('Failed to load initial data: ' + (err.message || 'Unknown error'))
-        hasLoadedInitialData.current = false // Reset on error to allow retry
+        setError(extractErrorMessage(err))
+        hasLoadedInitialData.current = false
       } finally {
         setIsLoadingSkills(false)
       }
@@ -89,19 +82,16 @@ export const HRDashboard: React.FC = () => {
     loadInitialData()
   }, [])
 
-  // Load scheduled interviews on mount - use ref to prevent double calls in StrictMode
   const hasLoadedInterviews = useRef(false)
   useEffect(() => {
-    // Prevent double calls in React StrictMode
     if (hasLoadedInterviews.current) return
     hasLoadedInterviews.current = true
 
     const loadScheduledInterviews = async () => {
       try {
         setIsLoadingInterviews(true)
-        setError(null) // Clear any previous errors
+        setError(null)
         const interviewsData = await apiService.getAllScheduledInterviews()
-        // Filter out cancelled interviews for HR dashboard
         const activeInterviews = interviewsData.filter((interview: any) => {
           const statusUpper = (interview.status || '').toUpperCase()
           return statusUpper === 'SCHEDULED'
@@ -113,7 +103,7 @@ export const HRDashboard: React.FC = () => {
           candidateEmail: interview.candidateEmail,
           panelName: interview.panelName,
           panelEmail: interview.panelEmail,
-          level: interview.level, // Now contains InterviewType.Name (e.g., "L1 - Initial Screening")
+          level: interview.level,
           date: interview.date || interview.scheduledDate,
           startTime: interview.startTime,
           endTime: interview.endTime,
@@ -122,9 +112,8 @@ export const HRDashboard: React.FC = () => {
         }))
         setScheduledInterviews(formattedInterviews)
       } catch (err: any) {
-        console.error('Error loading scheduled interviews:', err)
         setError('Failed to load scheduled interviews: ' + (err.response?.data?.message || err.message || 'Unknown error'))
-        hasLoadedInterviews.current = false // Reset on error to allow retry
+        hasLoadedInterviews.current = false
       } finally {
         setIsLoadingInterviews(false)
       }
@@ -133,7 +122,6 @@ export const HRDashboard: React.FC = () => {
   }, [])
 
 
-  // Close skill dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -153,7 +141,6 @@ export const HRDashboard: React.FC = () => {
     }
   }, [isSkillDropdownOpen])
 
-  // Load candidates when position changes
   useEffect(() => {
     const loadCandidates = async () => {
       if (!selectedPositionId) {
@@ -165,22 +152,18 @@ export const HRDashboard: React.FC = () => {
       try {
         const candidatesData = await apiService.getInterviewees(Number(selectedPositionId))
         setFilteredCandidates(candidatesData)
-        setInterviewees(candidatesData) // Also update main interviewees list
-        // Reset candidate selection if current selection is not in filtered list
         if (selectedCandidateId && !candidatesData.find(c => c.id === Number(selectedCandidateId))) {
           setSelectedCandidateId('')
         }
       } catch (err: any) {
-        setError('Failed to load candidates: ' + (err.message || 'Unknown error'))
+        setError(extractErrorMessage(err))
       }
     }
     loadCandidates()
   }, [selectedPositionId])
 
-  // Memoize min date/time
   const minDateTime = useMemo(() => getMinDateTime(), [])
 
-  // Memoize filtered skills based on search query
   const filteredSkills = useMemo(() => {
     const query = skillSearchQuery.toLowerCase()
     return availableSkills.filter(
@@ -190,7 +173,6 @@ export const HRDashboard: React.FC = () => {
     )
   }, [availableSkills, skillSearchQuery, selectedSkills])
 
-  // Handle form submission to find matching panels
   const handleSubmitForm = useCallback(async () => {
     if (!selectedInterviewTypeId) {
       setError('Please select an interview level')
@@ -217,7 +199,6 @@ export const HRDashboard: React.FC = () => {
 
       const matchedPanelsData = await apiService.searchAvailableInterviewers(searchParams)
       
-      // Calculate match percentage and matched skills
       const selectedSkillNames = selectedSkills
         .map(id => availableSkills.find(s => s.id.toString() === id)?.name)
         .filter(Boolean) as string[]
@@ -237,11 +218,11 @@ export const HRDashboard: React.FC = () => {
 
       setMatchedPanels(enrichedPanels)
     } catch (err: any) {
-      setError('Failed to search for available interviewers: ' + (err.response?.data?.message || err.message || 'Unknown error'))
+      setError(extractErrorMessage(err))
     } finally {
       setIsSearching(false)
     }
-  }, [selectedSkills, interviewDate, interviewTime, selectedInterviewTypeId, availableSkills, selectedPositionId, selectedCandidateId])
+  }, [selectedSkills, interviewDate, selectedInterviewTypeId, availableSkills, selectedPositionId, selectedCandidateId])
 
   const handleLogout = useCallback(async () => {
     await logout()
@@ -257,10 +238,8 @@ export const HRDashboard: React.FC = () => {
     )
   }, [])
 
-  // Handle booking directly using selected candidate
   const handleBookInterview = useCallback(
     async (panelId: number, slot?: AvailableTimeSlot) => {
-      // Validate that a candidate is selected
       if (!selectedCandidateId) {
         setError('Please select a candidate from the dropdown before booking')
         return
@@ -278,7 +257,6 @@ export const HRDashboard: React.FC = () => {
         return
       }
 
-      // Use provided slot or first available slot
       const selectedSlot = slot || panel.availableTimeSlots?.[0]
       if (!selectedSlot) {
         setError('No availability slot selected')
@@ -302,13 +280,10 @@ export const HRDashboard: React.FC = () => {
           return
         }
 
-        // Get selected skill IDs
         const primarySkillIds = selectedSkills
           .map(id => availableSkills.find(s => s.id.toString() === id)?.id)
           .filter((id): id is number => id !== undefined)
 
-        // Create interview
-        // Get HR user ID from auth context (user.id is a string, convert to number if needed)
         const hrUserId = user?.id ? parseInt(user.id) : undefined
         
         const interview = await apiService.createInterview({
@@ -323,22 +298,18 @@ export const HRDashboard: React.FC = () => {
           createdByUserId: hrUserId,
         })
 
-        // Use the full interview type name for level (e.g., "L1 - Initial Screening")
         const level = selectedInterviewType.name
 
-        // Get position title for the candidate
         const positionTitle = candidate.positionId 
           ? positions.find(p => p.id === candidate.positionId)?.title || null
           : null
-
-        // Add to scheduled interviews list
         const newInterview: ScheduledInterview = {
           id: interview.id,
           positionTitle: positionTitle,
           candidateName: candidate.name,
           candidateEmail: candidate.email,
           panelName: panel.name,
-          level: level, // Full InterviewType.Name (e.g., "L1 - Initial Screening")
+          level: level,
           date: selectedSlot.date,
           startTime: selectedSlot.startTime,
           endTime: selectedSlot.endTime,
@@ -349,8 +320,6 @@ export const HRDashboard: React.FC = () => {
         }
 
         setScheduledInterviews((prev) => [...prev, newInterview])
-        
-        // Reset form after successful booking
         setSelectedSkills([])
         setInterviewDate('')
         setInterviewTime('')
@@ -359,7 +328,7 @@ export const HRDashboard: React.FC = () => {
         setSelectedPositionId('')
         setSelectedInterviewTypeId('')
       } catch (err: any) {
-        setError('Failed to schedule interview: ' + (err.response?.data?.message || err.message || 'Unknown error'))
+        setError(extractErrorMessage(err))
       } finally {
         setIsBooking(false)
       }
@@ -372,15 +341,15 @@ export const HRDashboard: React.FC = () => {
       selectedInterviewTypeId,
       availableSkills,
       interviewTypes,
+      user?.id,
+      positions,
     ]
   )
 
   const handleCancelInterview = useCallback(async (interviewId: number) => {
     try {
       await apiService.cancelInterview(interviewId)
-      // Reload scheduled interviews to get updated status
       const interviewsData = await apiService.getAllScheduledInterviews()
-      // Filter out cancelled interviews for HR dashboard
       const activeInterviews = interviewsData.filter((interview: any) => {
         const statusUpper = (interview.status || '').toUpperCase()
         return statusUpper === 'SCHEDULED'
@@ -392,7 +361,7 @@ export const HRDashboard: React.FC = () => {
         candidateEmail: interview.candidateEmail,
         panelName: interview.panelName,
         panelEmail: interview.panelEmail,
-        level: interview.level, // Now contains InterviewType.Name (e.g., "L1 - Initial Screening")
+          level: interview.level,
         date: interview.date || interview.scheduledDate,
         startTime: interview.startTime,
         endTime: interview.endTime,
@@ -401,7 +370,7 @@ export const HRDashboard: React.FC = () => {
       }))
       setScheduledInterviews(formattedInterviews)
     } catch (err: any) {
-      setError('Failed to cancel interview: ' + (err.message || 'Unknown error'))
+      setError(extractErrorMessage(err))
     }
   }, [])
 
@@ -426,13 +395,12 @@ export const HRDashboard: React.FC = () => {
       setPanelRequestNotes('')
       setTimeout(() => setSuccess(null), 5000)
     } catch (err: any) {
-      setError('Failed to submit panel request: ' + (err.response?.data?.message || err.message || 'Unknown error'))
+      setError(extractErrorMessage(err))
     } finally {
       setIsSubmittingRequest(false)
     }
   }, [panelRequestName, panelRequestEmail, panelRequestNotes])
 
-  // Memoize selected skill names
   const selectedSkillNames = useMemo(
     () =>
       selectedSkills
@@ -444,32 +412,10 @@ export const HRDashboard: React.FC = () => {
   return (
     <div style={styles.container}>
       {/* Error/Success notification */}
-      {error && (
-        <div style={styles.errorBanner} className="fade-in">
-          <span style={styles.errorIcon}>⚠️</span>
-          <span>{error}</span>
-          <button
-            onClick={() => setError(null)}
-            style={styles.errorClose}
-            aria-label="Close error"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-      {success && (
-        <div style={styles.successBanner} className="fade-in">
-          <span style={styles.successIcon}>✓</span>
-          <span>{success}</span>
-          <button
-            onClick={() => setSuccess(null)}
-            style={styles.errorClose}
-            aria-label="Close success"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+      <div style={{ position: 'sticky', top: '3.5rem', zIndex: 40 }}>
+        <ErrorDisplay error={error} onDismiss={() => setError(null)} />
+        <SuccessDisplay message={success} onDismiss={() => setSuccess(null)} />
+      </div>
       {/* Header */}
       <header style={styles.header}>
         <div style={styles.headerLeft}>
@@ -539,44 +485,48 @@ export const HRDashboard: React.FC = () => {
                     <label style={styles.label}>
                       Open Position
                     </label>
-                    <select
-                      value={selectedPositionId}
-                      onChange={(e) => {
-                        setSelectedPositionId(e.target.value ? Number(e.target.value) : '')
-                        setSelectedCandidateId('') // Reset candidate when position changes
-                      }}
-                      style={styles.select}
-                      className="input-focus"
-                    >
-                      <option value="">Select position</option>
-                      {positions.map((position) => (
-                        <option key={position.id} value={position.id}>
-                          {position.title}
-                        </option>
-                      ))}
-                    </select>
+                    <div style={styles.selectWrapper}>
+                      <select
+                        value={selectedPositionId}
+                        onChange={(e) => {
+                          setSelectedPositionId(e.target.value ? Number(e.target.value) : '')
+                          setSelectedCandidateId('')
+                        }}
+                        style={styles.select}
+                        className="input-focus select-enhanced"
+                      >
+                        <option value="">Select position</option>
+                        {positions.map((position) => (
+                          <option key={position.id} value={position.id}>
+                            {position.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                   <div style={styles.formGroup}>
                     <label style={styles.label}>
                       Candidate
                     </label>
-                    <select
-                      value={selectedCandidateId}
-                      onChange={(e) => setSelectedCandidateId(e.target.value ? Number(e.target.value) : '')}
-                      style={{
-                        ...styles.select,
-                        ...(!selectedPositionId ? { opacity: 0.6, cursor: 'not-allowed' } : {})
-                      }}
-                      className="input-focus"
-                      disabled={!selectedPositionId}
-                    >
+                    <div style={styles.selectWrapper}>
+                      <select
+                        value={selectedCandidateId}
+                        onChange={(e) => setSelectedCandidateId(e.target.value ? Number(e.target.value) : '')}
+                        style={{
+                          ...styles.select,
+                          ...(!selectedPositionId ? { opacity: 0.6, cursor: 'not-allowed' } : {})
+                        }}
+                        className="input-focus select-enhanced"
+                        disabled={!selectedPositionId}
+                      >
                       <option value="">Select candidate</option>
                       {filteredCandidates.map((candidate) => (
                         <option key={candidate.id} value={candidate.id}>
                           {candidate.name} ({candidate.email})
                         </option>
                       ))}
-                    </select>
+                      </select>
+                    </div>
                   </div>
                 </div>
                 <div style={styles.formRow}>
@@ -584,21 +534,23 @@ export const HRDashboard: React.FC = () => {
                     <label style={styles.label}>
                       Interview Level <span style={styles.required}>*</span>
                     </label>
-                    <select
-                      value={selectedInterviewTypeId}
-                      onChange={(e) =>
-                        setSelectedInterviewTypeId(e.target.value ? Number(e.target.value) : '')
-                      }
-                      style={styles.select}
-                      className="input-focus"
-                    >
-                      <option value="">Select interview level</option>
-                      {interviewTypes.map((type) => (
-                        <option key={type.id} value={type.id}>
-                          {type.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div style={styles.selectWrapper}>
+                      <select
+                        value={selectedInterviewTypeId}
+                        onChange={(e) =>
+                          setSelectedInterviewTypeId(e.target.value ? Number(e.target.value) : '')
+                        }
+                        style={styles.select}
+                        className="input-focus select-enhanced"
+                      >
+                        <option value="">Select interview level</option>
+                        {interviewTypes.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {type.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                   <div style={styles.formGroup}>
                     <label style={styles.label}>
@@ -636,6 +588,13 @@ export const HRDashboard: React.FC = () => {
                                 key={skill.id}
                                 onClick={() => toggleSkill(skill.id.toString())}
                                 style={styles.skillDropdownItem}
+                                className="skill-dropdown-item-hover"
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = activeSidebarBg
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = 'white'
+                                }}
                               >
                                 <input
                                   type="checkbox"
@@ -695,8 +654,16 @@ export const HRDashboard: React.FC = () => {
                     onClick={handleSubmitForm}
                     style={styles.submitButton}
                     className="button-hover"
+                    disabled={isSearching}
                   >
-                    Find Matching Panels
+                    {isSearching ? (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span className="spinner" style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%' }}></span>
+                        Searching...
+                      </span>
+                    ) : (
+                      'Find Matching Panels'
+                    )}
                   </button>
                 </div>
               </div>
@@ -725,13 +692,7 @@ export const HRDashboard: React.FC = () => {
                             ...styles.tableRow,
                             animation: `fadeInUp 0.3s ease-out ${index * 0.1}s both`,
                           }}
-                          className="fade-in-up"
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#f9f9f9'
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'transparent'
-                          }}
+                          className="fade-in-up table-row-hover"
                         >
                           <td style={styles.tableCell}>
                             <div>
@@ -890,13 +851,7 @@ export const HRDashboard: React.FC = () => {
                             ...styles.tableRow,
                             animation: `fadeInUp 0.3s ease-out ${index * 0.05}s both`,
                           }}
-                          className="fade-in-up"
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#f9f9f9'
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'transparent'
-                          }}
+                          className="fade-in-up table-row-hover"
                         >
                           <td style={styles.tableCell}>
                             <span style={styles.positionBadge}>
@@ -994,14 +949,12 @@ export const HRDashboard: React.FC = () => {
   )
 }
 
-// Color palette matching the exact design system
 const primaryPurple = '#4a1e47'
 const activeSidebarBg = '#F5EEF7'
 const white = '#FFFFFF'
 const textDark = '#333333'
 const textLight = '#666666'
 const borderGray = '#E0E0E0'
-const placeholderGray = '#999999'
 
 const styles: { [key: string]: React.CSSProperties } = {
   container: {
@@ -1229,16 +1182,29 @@ const styles: { [key: string]: React.CSSProperties } = {
     outline: 'none',
     transition: 'border-color 0.2s, box-shadow 0.2s',
   },
+  selectWrapper: {
+    position: 'relative',
+    display: 'inline-block',
+    width: '100%',
+  },
   select: {
     padding: '0.5rem 0.75rem',
+    paddingRight: '2.5rem',
     border: `1px solid ${borderGray}`,
-    borderRadius: '4px',
+    borderRadius: '6px',
     fontSize: '0.875rem',
     backgroundColor: white,
     color: textDark,
     outline: 'none',
     cursor: 'pointer',
-    transition: 'border-color 0.2s, box-shadow 0.2s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    fontFamily: 'inherit',
+    width: '100%',
+    appearance: 'none',
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666666' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 0.75rem center',
+    backgroundSize: '12px',
   },
   skillSelectContainer: {
     position: 'relative',
@@ -1246,7 +1212,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   skillSelectButton: {
     padding: '0.5rem 0.75rem',
     border: `1px solid ${borderGray}`,
-    borderRadius: '4px',
+    borderRadius: '6px',
     fontSize: '0.875rem',
     backgroundColor: white,
     color: textDark,
@@ -1254,10 +1220,15 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    minHeight: '38px',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
   },
   dropdownArrow: {
     fontSize: '0.75rem',
     color: textLight,
+    transition: 'transform 0.2s ease, color 0.2s ease',
+    marginLeft: '0.5rem',
   },
   skillDropdown: {
     position: 'absolute',
@@ -1273,11 +1244,15 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     flexDirection: 'column',
     maxHeight: '300px',
+    animation: 'dropdownFade 0.2s ease-out',
   },
   skillDropdownHeader: {
     padding: '0.75rem',
     borderBottom: `1px solid ${borderGray}`,
-    backgroundColor: white,
+    backgroundColor: '#f9f9f9',
+    position: 'sticky',
+    top: 0,
+    zIndex: 1,
   },
   skillSearchInput: {
     width: '100%',
@@ -1288,10 +1263,15 @@ const styles: { [key: string]: React.CSSProperties } = {
     outline: 'none',
     backgroundColor: white,
     color: textDark,
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    fontFamily: 'inherit',
   },
   skillDropdownList: {
     maxHeight: '250px',
     overflowY: 'auto',
+    padding: '0.25rem 0',
+    scrollbarWidth: 'thin',
+    scrollbarColor: `${borderGray} transparent`,
   },
   skillDropdownItem: {
     padding: '0.75rem 1rem',
@@ -1302,7 +1282,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     alignItems: 'center',
     gap: '0.75rem',
-    transition: 'background-color 0.2s',
+    transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+    backgroundColor: white,
   },
   checkbox: {
     cursor: 'pointer',
@@ -1386,7 +1367,8 @@ const styles: { [key: string]: React.CSSProperties } = {
   progressFill: {
     height: '100%',
     backgroundColor: primaryPurple,
-    transition: 'width 0.3s',
+    transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+    borderRadius: '4px',
   },
   progressText: {
     fontSize: '0.75rem',
@@ -1440,7 +1422,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.875rem',
     fontWeight: '500',
     cursor: 'pointer',
-    transition: 'background-color 0.2s, transform 0.1s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    boxShadow: '0 2px 4px rgba(74, 30, 71, 0.2)',
   },
   bookButtonsContainer: {
     display: 'flex',
@@ -1456,7 +1439,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.75rem',
     fontWeight: '500',
     cursor: 'pointer',
-    transition: 'background-color 0.2s, transform 0.1s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    boxShadow: '0 2px 4px rgba(74, 30, 71, 0.2)',
     whiteSpace: 'nowrap',
   },
   levelBadge: {
@@ -1476,7 +1460,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.875rem',
     fontWeight: '500',
     cursor: 'pointer',
-    transition: 'background-color 0.2s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    boxShadow: '0 2px 4px rgba(220, 53, 69, 0.2)',
   },
   emptyMessage: {
     textAlign: 'center',
@@ -1521,6 +1506,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
+    animation: 'fadeIn 0.2s ease-out',
   },
   modalContent: {
     backgroundColor: white,
@@ -1532,6 +1518,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     overflow: 'auto',
     display: 'flex',
     flexDirection: 'column',
+    animation: 'scaleIn 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
   },
   modalHeader: {
     padding: '1.5rem',

@@ -1,4 +1,6 @@
 // AIModified:2026-01-11T05:42:58Z
+using System.ComponentModel.DataAnnotations;
+
 namespace InterviewScheduling.API.DTOs;
 
 public class AvailabilitySlotDto
@@ -12,7 +14,12 @@ public class AvailabilitySlotDto
 
 public class CreateAvailabilitySlotDto
 {
+    [Required(ErrorMessage = "Date is required")]
     public DateTime Date { get; set; }
+    
+    [Required(ErrorMessage = "Start time is required")]
     public TimeSpan StartTime { get; set; }
+    
+    [Required(ErrorMessage = "End time is required")]
     public TimeSpan EndTime { get; set; }
 }

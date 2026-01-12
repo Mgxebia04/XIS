@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using InterviewScheduling.API.Data;
 using InterviewScheduling.API.DTOs;
 using InterviewScheduling.API.Models;
+using InterviewScheduling.API.Helpers;
 
 namespace InterviewScheduling.API.Controllers;
 
@@ -21,83 +22,74 @@ public class PanelRequestController : ControllerBase
         _logger = logger;
     }
 
-    private int? GetCurrentUserId()
-    {
-        var authHeader = Request.Headers["Authorization"].ToString();
-        if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer "))
-            return null;
-
-        try
-        {
-            var token = authHeader.Substring(7);
-            var tokenData = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(token));
-            var parts = tokenData.Split(':');
-            if (parts.Length > 0 && int.TryParse(parts[0], out var userId))
-                return userId;
-        }
-        catch { }
-
-        return null;
-    }
 
     /// <summary>
     /// HR can request to add a new panel member
     /// </summary>
     [HttpPost("request-panel")]
-    public async Task<ActionResult> RequestPanel([FromBody] PanelRequestDto request)
+    public async Task<ActionResult> RequestPanel([FromBody] RequestPanelDto request)
     {
-        var userId = GetCurrentUserId();
-        if (userId == null)
+        try
         {
-            return Unauthorized();
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(new { message = "Invalid request data", errors = ModelState });
+            }
+
+            if (!await AuthorizationHelper.IsHrManagerAsync(this, _context))
+            {
+                return Forbid("Only HR Managers can request panel members");
+            }
+
+            var userId = AuthorizationHelper.GetCurrentUserId(this);
+            if (userId == null)
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
+            var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.PanelEmail);
+            if (existingUser != null)
+            {
+                _logger.LogWarning("RequestPanel attempted with existing email: {Email}", request.PanelEmail);
+                return Conflict(new { message = "User with this email already exists" });
+            }
+
+            var existingRequest = await _context.PanelRequests
+                .FirstOrDefaultAsync(r => r.PanelEmail == request.PanelEmail && r.Status == "PENDING");
+            if (existingRequest != null)
+            {
+                return Conflict(new { message = "A pending request for this email already exists" });
+            }
+
+            var panelRequest = new PanelRequest
+            {
+                RequestedByUserId = userId,
+                PanelName = request.PanelName,
+                PanelEmail = request.PanelEmail,
+                Notes = request.Notes,
+                Status = "PENDING",
+                CreatedAt = DateTime.UtcNow,
+            };
+
+            _context.PanelRequests.Add(panelRequest);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Panel request submitted: RequestId={RequestId}, PanelEmail={PanelEmail}", panelRequest.Id, request.PanelEmail);
+            return Ok(new { 
+                message = "Panel request submitted successfully",
+                requestId = panelRequest.Id
+            });
         }
-
-        // Verify user is HR Manager
-        var user = await _context.Users.FindAsync(userId);
-        if (user == null || user.Role != "HR Manager")
+        catch (DbUpdateException ex)
         {
-            return Forbid("Only HR Managers can request panel members");
+            _logger.LogError(ex, "Database error submitting panel request");
+            return StatusCode(500, new { message = "An error occurred while submitting the panel request. Please try again." });
         }
-
-        // Validate input
-        if (string.IsNullOrWhiteSpace(request.PanelName) || string.IsNullOrWhiteSpace(request.PanelEmail))
+        catch (Exception ex)
         {
-            return BadRequest(new { message = "Panel name and email are required" });
+            _logger.LogError(ex, "Error submitting panel request");
+            return StatusCode(500, new { message = "An unexpected error occurred. Please try again later." });
         }
-
-        // Check if email already exists
-        var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.PanelEmail);
-        if (existingUser != null)
-        {
-            return Conflict(new { message = "User with this email already exists" });
-        }
-
-        // Check if there's already a pending request for this email
-        var existingRequest = await _context.PanelRequests
-            .FirstOrDefaultAsync(r => r.PanelEmail == request.PanelEmail && r.Status == "PENDING");
-        if (existingRequest != null)
-        {
-            return Conflict(new { message = "A pending request for this email already exists" });
-        }
-
-        // Create panel request
-        var panelRequest = new PanelRequest
-        {
-            RequestedByUserId = userId,
-            PanelName = request.PanelName,
-            PanelEmail = request.PanelEmail,
-            Notes = request.Notes,
-            Status = "PENDING",
-            CreatedAt = DateTime.UtcNow,
-        };
-
-        _context.PanelRequests.Add(panelRequest);
-        await _context.SaveChangesAsync();
-
-        return Ok(new { 
-            message = "Panel request submitted successfully",
-            requestId = panelRequest.Id
-        });
     }
 
     /// <summary>
@@ -106,31 +98,44 @@ public class PanelRequestController : ControllerBase
     [HttpGet("my-requests")]
     public async Task<ActionResult<List<PanelRequestDto>>> GetMyRequests()
     {
-        var userId = GetCurrentUserId();
-        if (userId == null)
+        try
         {
-            return Unauthorized();
-        }
-
-        var requests = await _context.PanelRequests
-            .Include(r => r.RequestedByUser)
-            .Where(r => r.RequestedByUserId == userId)
-            .OrderByDescending(r => r.CreatedAt)
-            .Select(r => new PanelRequestDto
+            if (!await AuthorizationHelper.IsHrManagerAsync(this, _context))
             {
-                Id = r.Id,
-                RequestedByUserId = r.RequestedByUserId,
-                RequestedByUserName = r.RequestedByUser!.Name ?? r.RequestedByUser.Email,
-                RequestedByUserEmail = r.RequestedByUser.Email,
-                PanelName = r.PanelName,
-                PanelEmail = r.PanelEmail,
-                Notes = r.Notes,
-                Status = r.Status,
-                CreatedAt = r.CreatedAt,
-                ProcessedAt = r.ProcessedAt,
-            })
-            .ToListAsync();
+                return Forbid("Only HR Managers can view panel requests");
+            }
 
-        return Ok(requests);
+            var userId = AuthorizationHelper.GetCurrentUserId(this);
+            if (userId == null)
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
+            var requests = await _context.PanelRequests
+                .Include(r => r.RequestedByUser)
+                .Where(r => r.RequestedByUserId == userId)
+                .OrderByDescending(r => r.CreatedAt)
+                .Select(r => new PanelRequestDto
+                {
+                    Id = r.Id,
+                    RequestedByUserId = r.RequestedByUserId,
+                    RequestedByUserName = r.RequestedByUser!.Name ?? r.RequestedByUser.Email,
+                    RequestedByUserEmail = r.RequestedByUser.Email,
+                    PanelName = r.PanelName,
+                    PanelEmail = r.PanelEmail,
+                    Notes = r.Notes,
+                    Status = r.Status,
+                    CreatedAt = r.CreatedAt,
+                    ProcessedAt = r.ProcessedAt,
+                })
+                .ToListAsync();
+
+            return Ok(requests);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting panel requests for user");
+            return StatusCode(500, new { message = "An error occurred while retrieving panel requests. Please try again later." });
+        }
     }
 }

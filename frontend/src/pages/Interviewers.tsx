@@ -27,7 +27,6 @@ export const Interviewers: React.FC = () => {
         const stats = await apiService.getAllInterviewersWithStats()
         setInterviewersStats(stats)
       } catch (err: any) {
-        console.error('Error loading interviewers stats:', err)
         setError('Failed to load interviewers: ' + (err.response?.data?.message || err.message || 'Unknown error'))
         hasLoadedData.current = false
       } finally {
@@ -55,12 +54,13 @@ export const Interviewers: React.FC = () => {
     <div style={styles.container}>
       {/* Error notification */}
       {error && (
-        <div style={styles.errorBanner} className="fade-in">
+        <div style={styles.errorBanner} className="notification-enter fade-in-down">
           <span style={styles.errorIcon}>⚠️</span>
           <span>{error}</span>
           <button
             onClick={() => setError(null)}
             style={styles.errorClose}
+            className="button-hover"
             aria-label="Close error"
           >
             ✕
@@ -85,7 +85,7 @@ export const Interviewers: React.FC = () => {
               <span style={styles.userName}>{user?.name}</span>
             </div>
           </div>
-          <button onClick={handleLogout} style={styles.logoutButton}>
+          <button onClick={handleLogout} style={styles.logoutButton} className="button-hover">
             Logout
           </button>
         </div>
@@ -181,13 +181,7 @@ export const Interviewers: React.FC = () => {
                           ...styles.tableRow,
                           animation: `fadeInUp 0.3s ease-out ${index * 0.05}s both`,
                         }}
-                        className="fade-in-up"
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = '#f9f9f9'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent'
-                        }}
+                        className="fade-in-up table-row-hover"
                       >
                         <td style={styles.tableCell}>
                           <div style={styles.panelName}>{interviewer.name}</div>
@@ -312,7 +306,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.875rem',
     fontWeight: '500',
     cursor: 'pointer',
-    transition: 'background-color 0.2s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
   },
   layout: {
     display: 'flex',
@@ -412,7 +406,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: '50%',
     width: '48px',
     height: '48px',
-    animation: 'spin 1s linear infinite',
+    animation: 'spin-smooth 0.8s linear infinite',
   },
   loadingText: {
     fontSize: '1rem',
@@ -425,6 +419,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: '1.5rem',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
     overflowX: 'auto',
+    transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
   },
   table: {
     width: '100%',
@@ -442,6 +437,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   tableRow: {
     borderBottom: `1px solid ${borderGray}`,
+    transition: 'background-color 0.15s ease, transform 0.15s ease',
   },
   tableCell: {
     padding: '1rem',
@@ -499,7 +495,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.875rem',
     fontWeight: '500',
     cursor: 'pointer',
-    transition: 'background-color 0.2s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    boxShadow: '0 2px 4px rgba(74, 30, 71, 0.2)',
   },
   emptyMessage: {
     textAlign: 'center',
@@ -538,6 +535,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: '8px',
     padding: '2rem',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
   },
   backButton: {
     padding: '0.5rem 1rem',
@@ -549,7 +547,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontWeight: '500',
     cursor: 'pointer',
     marginBottom: '1.5rem',
-    transition: 'background-color 0.2s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
   },
   detailContent: {
     display: 'flex',

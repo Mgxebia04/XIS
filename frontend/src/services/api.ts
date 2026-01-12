@@ -15,6 +15,7 @@ import type {
   ScheduledInterview,
   InterviewerStats,
 } from '@/types'
+import { extractErrorMessage } from '@/utils/errorUtils'
 
 // Backend URL - matches backend launchSettings.json (http://localhost:5268)
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5268'
@@ -28,6 +29,7 @@ class ApiService {
       headers: {
         'Content-Type': 'application/json',
       },
+      timeout: 30000, // 30 seconds timeout
     })
 
     // Request interceptor to add auth token
@@ -48,19 +50,41 @@ class ApiService {
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        if (error.response?.status === 401) {
-          // Handle unauthorized - clear token and redirect to login
-          localStorage.removeItem('authToken')
-          localStorage.removeItem('user')
-          window.location.href = '/login'
+        // Enhance error with extracted message
+        if (error.response) {
+          const enhancedError = {
+            ...error,
+            message: extractErrorMessage(error),
+          }
+          
+          if (error.response.status === 401) {
+            // Handle unauthorized - clear token and redirect to login
+            localStorage.removeItem('authToken')
+            localStorage.removeItem('user')
+            // Only redirect if not already on login page
+            if (window.location.pathname !== '/login') {
+              window.location.href = '/login'
+            }
+          }
+          
+          return Promise.reject(enhancedError)
         }
+        
+        // Handle network errors
+        if (error.request) {
+          const networkError = {
+            ...error,
+            message: extractErrorMessage(error),
+          }
+          return Promise.reject(networkError)
+        }
+        
         return Promise.reject(error)
       }
     )
   }
 
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    // Send only email and password - role will be determined by backend from user table
     const response = await this.client.post<BackendLoginResponse>('/api/auth/login', {
       email: credentials.email,
       password: credentials.password,
@@ -106,8 +130,7 @@ class ApiService {
   }
 
   async logout(): Promise<void> {
-    // Backend doesn't have logout endpoint, just clear local storage
-    // No API call needed
+    // No API call needed - logout is handled client-side
   }
 
   // Skills API
@@ -314,16 +337,7 @@ class ApiService {
   }
 
   async cancelInterview(interviewId: number): Promise<void> {
-    try {
-      console.log('API: Cancelling interview', interviewId)
-      const response = await this.client.put(`/api/schedule/cancel/${interviewId}`)
-      console.log('API: Cancel response', response.status, response.statusText)
-      // NoContent (204) response is expected, but we handle it gracefully
-      return
-    } catch (error: any) {
-      console.error('API: Cancel interview error', error)
-      throw error
-    }
+    await this.client.put(`/api/schedule/cancel/${interviewId}`)
   }
 
   // Helper methods for TimeSpan conversion

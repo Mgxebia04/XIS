@@ -15,6 +15,25 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
         // Use camelCase for JSON property names to match frontend expectations
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    })
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        // Return validation errors in a consistent format
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState
+                .Where(x => x.Value?.Errors.Count > 0)
+                .ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => kvp.Value!.Errors.Select(e => e.ErrorMessage).ToArray()
+                );
+
+            return new BadRequestObjectResult(new
+            {
+                message = "Validation failed",
+                errors = errors
+            });
+        };
     });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -45,8 +64,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("AllowAll");
-// Authorization is handled at controller/action level, not globally
-// app.UseAuthorization(); // Commented out - using simple token-based auth without middleware
+// Note: Authorization is handled at controller/action level, not globally
+// app.UseAuthorization(); // Not used - using simple token-based auth without middleware
 app.MapControllers();
 
 // Ensure database is created and model is validated
@@ -56,22 +75,13 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        // EnsureCreated only creates if database doesn't exist
-        // For existing databases, we just validate the connection
         if (!context.Database.CanConnect())
         {
             context.Database.EnsureCreated();
         }
         else
         {
-            // Validate that the model matches the database schema
-            // This will throw if there's a mismatch
-            var canConnect = context.Database.CanConnect();
-            if (canConnect)
-            {
-                // Force EF Core to rebuild its model cache by creating a simple query
-                var _ = context.Users.Count();
-            }
+            _ = context.Users.Count();
         }
     }
     catch (Exception ex)

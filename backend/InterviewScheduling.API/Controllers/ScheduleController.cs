@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using InterviewScheduling.API.Data;
 using InterviewScheduling.API.DTOs;
 using InterviewScheduling.API.Models;
+using InterviewScheduling.API.Helpers;
 
 namespace InterviewScheduling.API.Controllers;
 
@@ -22,54 +23,83 @@ public class ScheduleController : ControllerBase
     }
 
     [HttpGet("interviewer/{interviewerId}")]
+    [Authorize]
     public async Task<ActionResult<List<InterviewerScheduleDto>>> GetInterviewerSchedule(int interviewerId)
     {
-        // Use projection to DTO for better performance - avoids loading full entity graphs
-        // Join with Users table to get HR details explicitly
-        var interviews = await (from i in _context.Interviews
-                                where i.InterviewerProfileId == interviewerId
-                                join hr in _context.Users on i.CreatedByUserId equals hr.Id into hrGroup
-                                from hrUser in hrGroup.DefaultIfEmpty()
-                                select new InterviewerScheduleDto
-                                {
-                                    Id = i.Id,
-                                    InterviewerProfileId = i.InterviewerProfileId,
-                                    IntervieweeId = i.IntervieweeId,
-                                    InterviewTypeId = i.InterviewTypeId,
-                                    ScheduledDate = i.ScheduledDate,
-                                    StartTime = i.StartTime,
-                                    EndTime = i.EndTime,
-                                    Status = i.Status,
-                                    CandidateName = i.Interviewee.Name,
-                                    CandidateEmail = i.Interviewee.Email,
-                                    InterviewTypeName = i.InterviewType.Name,
-                                    Skills = i.InterviewRequirements.Select(r => r.Skill.Name).ToList(),
-                                    HrName = hrUser != null ? hrUser.Name : null,
-                                    HrEmail = hrUser != null ? hrUser.Email : null
-                                })
-                                .OrderBy(i => i.ScheduledDate)
-                                .ThenBy(i => i.StartTime)
-                                .ToListAsync();
+        try
+        {
+            if (interviewerId <= 0)
+            {
+                return BadRequest(new { message = "Invalid interviewer ID" });
+            }
 
-        return Ok(interviews);
+            var userId = AuthorizationHelper.GetCurrentUserId(this);
+            if (userId == null)
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
+            var profile = await _context.InterviewerProfiles
+                .FirstOrDefaultAsync(p => p.Id == interviewerId && p.UserId == userId);
+            
+            if (profile == null)
+            {
+                _logger.LogWarning("GetInterviewerSchedule attempted for unauthorized profile: InterviewerId={InterviewerId}, UserId={UserId}", interviewerId, userId);
+                return Forbid("You can only view your own schedule");
+            }
+
+            var interviews = await (from i in _context.Interviews
+                                    where i.InterviewerProfileId == interviewerId
+                                    join hr in _context.Users on i.CreatedByUserId equals hr.Id into hrGroup
+                                    from hrUser in hrGroup.DefaultIfEmpty()
+                                    select new InterviewerScheduleDto
+                                    {
+                                        Id = i.Id,
+                                        InterviewerProfileId = i.InterviewerProfileId,
+                                        IntervieweeId = i.IntervieweeId,
+                                        InterviewTypeId = i.InterviewTypeId,
+                                        ScheduledDate = i.ScheduledDate,
+                                        StartTime = i.StartTime,
+                                        EndTime = i.EndTime,
+                                        Status = i.Status,
+                                        CandidateName = i.Interviewee.Name,
+                                        CandidateEmail = i.Interviewee.Email,
+                                        InterviewTypeName = i.InterviewType.Name,
+                                        Skills = i.InterviewRequirements.Select(r => r.Skill.Name).ToList(),
+                                        HrName = hrUser != null ? hrUser.Name : null,
+                                        HrEmail = hrUser != null ? hrUser.Email : null
+                                    })
+                                    .OrderBy(i => i.ScheduledDate)
+                                    .ThenBy(i => i.StartTime)
+                                    .ToListAsync();
+
+            return Ok(interviews);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting interviewer schedule: {InterviewerId}", interviewerId);
+            return StatusCode(500, new { message = "An error occurred while retrieving the schedule. Please try again later." });
+        }
     }
 
     [HttpGet("all")]
     [AllowAnonymous]
     public async Task<ActionResult<List<ScheduledInterviewDto>>> GetAllScheduledInterviews()
     {
-        // Load interviews with necessary includes, then project to DTO to avoid circular references
-        var interviews = await _context.Interviews
-            .Include(i => i.Interviewee)
-                .ThenInclude(e => e.Position) // Include Position for Open Position
-            .Include(i => i.InterviewerProfile)
-                .ThenInclude(p => p.User)
-            .Include(i => i.InterviewType) // Include InterviewType for Level
-            .Include(i => i.InterviewRequirements)
-                .ThenInclude(r => r.Skill)
-            .OrderBy(i => i.ScheduledDate)
-            .ThenBy(i => i.StartTime)
-            .ToListAsync();
+        try
+        {
+            // Load interviews with necessary includes, then project to DTO to avoid circular references
+            var interviews = await _context.Interviews
+                .Include(i => i.Interviewee)
+                    .ThenInclude(e => e.Position) // Include Position for Open Position
+                .Include(i => i.InterviewerProfile)
+                    .ThenInclude(p => p.User)
+                .Include(i => i.InterviewType) // Include InterviewType for Level
+                .Include(i => i.InterviewRequirements)
+                    .ThenInclude(r => r.Skill)
+                .OrderBy(i => i.ScheduledDate)
+                .ThenBy(i => i.StartTime)
+                .ToListAsync();
 
         // Project to DTO after loading to avoid circular references and reduce payload size
         var result = interviews.Select(i => new ScheduledInterviewDto
@@ -80,7 +110,7 @@ public class ScheduleController : ControllerBase
             CandidateEmail = i.Interviewee.Email,
             PanelName = i.InterviewerProfile.User.Name ?? "Unknown",
             PanelEmail = i.InterviewerProfile.User.Email,
-            Level = i.InterviewType.Name, // Use InterviewType.Name instead of InterviewerProfile.Level
+            Level = i.InterviewType.Name,
             ScheduledDate = i.ScheduledDate,
             StartTime = i.StartTime,
             EndTime = i.EndTime,
@@ -92,79 +122,161 @@ public class ScheduleController : ControllerBase
     }
 
     [HttpPost("search")]
+    [Authorize]
     public async Task<ActionResult<List<AvailableInterviewerDto>>> SearchAvailableInterviewers(
         [FromBody] InterviewSearchDto searchDto)
     {
-        var query = _context.InterviewerProfiles
-            .Include(p => p.User)
-            .Include(p => p.InterviewerSkills)
-                .ThenInclude(s => s.Skill)
-            .Include(p => p.AvailabilitySlots)
-            .AsQueryable();
-
-        // Filter by primary skills
-        if (searchDto.PrimarySkillIds != null && searchDto.PrimarySkillIds.Any())
+        try
         {
-            query = query.Where(p => p.InterviewerSkills
-                .Any(s => s.IsPrimary && searchDto.PrimarySkillIds.Contains(s.SkillId)));
-        }
+            if (searchDto == null)
+            {
+                return BadRequest(new { message = "Search criteria are required" });
+            }
 
-        // Filter by secondary skills
-        if (searchDto.SecondarySkillIds != null && searchDto.SecondarySkillIds.Any())
-        {
-            query = query.Where(p => p.InterviewerSkills
-                .Any(s => !s.IsPrimary && searchDto.SecondarySkillIds.Contains(s.SkillId)));
-        }
+            // Only HR Managers can search for interviewers
+            if (!await AuthorizationHelper.IsHrManagerAsync(this, _context))
+            {
+                return Forbid("Only HR Managers can search for available interviewers");
+            }
 
-        // Filter by date
-        if (searchDto.InterviewDate.HasValue)
-        {
-            var date = searchDto.InterviewDate.Value.Date;
-            query = query.Where(p => p.AvailabilitySlots
-                .Any(a => a.Date == date && a.IsAvailable));
-        }
-
-        var profiles = await query.ToListAsync();
-
-        var result = profiles.Select(p => new AvailableInterviewerDto
-        {
-            InterviewerProfileId = p.Id,
-            Name = p.User.Name ?? "Unknown",
-            ProfilePictureUrl = p.User.ProfilePictureUrl,
-            Level = p.Level,
-            Skills = p.InterviewerSkills.Select(s => s.Skill.Name).ToList(),
-            AvailableTimeSlots = p.AvailabilitySlots
-                .Where(a => !searchDto.InterviewDate.HasValue || a.Date == searchDto.InterviewDate.Value.Date)
-                .Where(a => a.IsAvailable)
-                .Select(a => new AvailableTimeSlotDto
+            // Validate skill IDs if provided
+            if (searchDto.PrimarySkillIds != null && searchDto.PrimarySkillIds.Any())
+            {
+                var invalidIds = searchDto.PrimarySkillIds.Where(id => id <= 0).ToList();
+                if (invalidIds.Any())
                 {
-                    Date = a.Date,
-                    StartTime = a.StartTime,
-                    EndTime = a.EndTime
-                })
-                .OrderBy(a => a.Date)
-                .ThenBy(a => a.StartTime)
-                .ToList()
-        }).ToList();
+                    return BadRequest(new { message = $"Invalid primary skill IDs: {string.Join(", ", invalidIds)}" });
+                }
+            }
 
-        return Ok(result);
+            if (searchDto.SecondarySkillIds != null && searchDto.SecondarySkillIds.Any())
+            {
+                var invalidIds = searchDto.SecondarySkillIds.Where(id => id <= 0).ToList();
+                if (invalidIds.Any())
+                {
+                    return BadRequest(new { message = $"Invalid secondary skill IDs: {string.Join(", ", invalidIds)}" });
+                }
+            }
+
+            // Validate interview type ID if provided
+            if (searchDto.InterviewTypeId.HasValue && searchDto.InterviewTypeId.Value <= 0)
+            {
+                return BadRequest(new { message = "Invalid interview type ID" });
+            }
+
+            // Validate position ID if provided
+            if (searchDto.PositionId.HasValue && searchDto.PositionId.Value <= 0)
+            {
+                return BadRequest(new { message = "Invalid position ID" });
+            }
+
+            // Validate interviewee ID if provided
+            if (searchDto.IntervieweeId.HasValue && searchDto.IntervieweeId.Value <= 0)
+            {
+                return BadRequest(new { message = "Invalid interviewee ID" });
+            }
+
+            var query = _context.InterviewerProfiles
+                .Include(p => p.User)
+                .Include(p => p.InterviewerSkills)
+                    .ThenInclude(s => s.Skill)
+                .Include(p => p.AvailabilitySlots)
+                .AsQueryable();
+
+            if (searchDto.PrimarySkillIds != null && searchDto.PrimarySkillIds.Any())
+            {
+                query = query.Where(p => p.InterviewerSkills
+                    .Any(s => s.IsPrimary && searchDto.PrimarySkillIds.Contains(s.SkillId)));
+            }
+
+            if (searchDto.SecondarySkillIds != null && searchDto.SecondarySkillIds.Any())
+            {
+                query = query.Where(p => p.InterviewerSkills
+                    .Any(s => !s.IsPrimary && searchDto.SecondarySkillIds.Contains(s.SkillId)));
+            }
+
+            if (searchDto.InterviewDate.HasValue)
+            {
+                var date = searchDto.InterviewDate.Value.Date;
+                if (date < DateTime.UtcNow.Date)
+                {
+                    return BadRequest(new { message = "Interview date cannot be in the past" });
+                }
+                query = query.Where(p => p.AvailabilitySlots
+                    .Any(a => a.Date == date && a.IsAvailable));
+            }
+
+            var result = await query
+                .Select(p => new AvailableInterviewerDto
+                {
+                    InterviewerProfileId = p.Id,
+                    Name = p.User.Name ?? "Unknown",
+                    ProfilePictureUrl = p.User.ProfilePictureUrl,
+                    Level = p.Level,
+                    Skills = p.InterviewerSkills.Select(s => s.Skill.Name).ToList(),
+                    AvailableTimeSlots = p.AvailabilitySlots
+                        .Where(a => !searchDto.InterviewDate.HasValue || a.Date == searchDto.InterviewDate.Value.Date)
+                        .Where(a => a.IsAvailable)
+                        .Select(a => new AvailableTimeSlotDto
+                        {
+                            Date = a.Date,
+                            StartTime = a.StartTime,
+                            EndTime = a.EndTime
+                        })
+                        .OrderBy(a => a.Date)
+                        .ThenBy(a => a.StartTime)
+                        .ToList()
+                })
+                .ToListAsync();
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching for available interviewers");
+            return StatusCode(500, new { message = "An error occurred while searching for interviewers. Please try again later." });
+        }
     }
 
     [HttpPost("create")]
+    [Authorize]
     public async Task<ActionResult<Interview>> CreateInterview([FromBody] InterviewScheduleDto dto)
     {
-        // Check if interviewer is available at the requested time
-        var isAvailable = await _context.AvailabilitySlots
-            .AnyAsync(a => a.InterviewerProfileId == dto.InterviewerProfileId
-                && a.Date == dto.ScheduledDate.Date
-                && a.StartTime <= dto.StartTime
-                && a.EndTime >= dto.EndTime
-                && a.IsAvailable);
-
-        if (!isAvailable)
+        try
         {
-            return BadRequest(new { message = "Interviewer is not available at the requested time" });
-        }
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(new { message = "Invalid request data", errors = ModelState });
+            }
+
+            if (!await AuthorizationHelper.IsHrManagerAsync(this, _context))
+            {
+                return Forbid("Only HR Managers can create interviews");
+            }
+
+            // Validate date is in the future
+            if (dto.ScheduledDate.Date < DateTime.UtcNow.Date)
+            {
+                return BadRequest(new { message = "Interview date must be in the future" });
+            }
+
+            // Validate time range
+            if (dto.EndTime <= dto.StartTime)
+            {
+                return BadRequest(new { message = "End time must be after start time" });
+            }
+
+            var isAvailable = await _context.AvailabilitySlots
+                .AnyAsync(a => a.InterviewerProfileId == dto.InterviewerProfileId
+                    && a.Date == dto.ScheduledDate.Date
+                    && a.StartTime <= dto.StartTime
+                    && a.EndTime >= dto.EndTime
+                    && a.IsAvailable);
+
+            if (!isAvailable)
+            {
+                return BadRequest(new { message = "Interviewer is not available at the requested time" });
+            }
 
         var interview = new Interview
         {
@@ -181,7 +293,6 @@ public class ScheduleController : ControllerBase
         _context.Interviews.Add(interview);
         await _context.SaveChangesAsync();
 
-        // Add interview requirements
         foreach (var skillId in dto.PrimarySkillIds)
         {
             interview.InterviewRequirements.Add(new InterviewRequirement
@@ -202,7 +313,6 @@ public class ScheduleController : ControllerBase
             });
         }
 
-        // Mark availability slot as unavailable
         var availabilitySlot = await _context.AvailabilitySlots
             .FirstOrDefaultAsync(a => a.InterviewerProfileId == dto.InterviewerProfileId
                 && a.Date == dto.ScheduledDate.Date
@@ -218,52 +328,96 @@ public class ScheduleController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        var result = await _context.Interviews
-            .Include(i => i.Interviewee)
-            .Include(i => i.InterviewType)
-            .Include(i => i.InterviewRequirements)
-                .ThenInclude(r => r.Skill)
-            .FirstOrDefaultAsync(i => i.Id == interview.Id);
+            var result = await _context.Interviews
+                .Include(i => i.Interviewee)
+                .Include(i => i.InterviewType)
+                .Include(i => i.InterviewRequirements)
+                    .ThenInclude(r => r.Skill)
+                .FirstOrDefaultAsync(i => i.Id == interview.Id);
 
-        return CreatedAtAction(nameof(GetInterviewerSchedule), new { interviewerId = dto.InterviewerProfileId }, result);
+            _logger.LogInformation("Interview created successfully: InterviewId={InterviewId}, InterviewerId={InterviewerId}", interview.Id, dto.InterviewerProfileId);
+            return CreatedAtAction(nameof(GetInterviewerSchedule), new { interviewerId = dto.InterviewerProfileId }, result);
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogError(ex, "Database error creating interview");
+            return StatusCode(500, new { message = "An error occurred while creating the interview. Please try again." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating interview");
+            return StatusCode(500, new { message = "An unexpected error occurred. Please try again later." });
+        }
     }
 
     [HttpPut("cancel/{interviewId}")]
-    [AllowAnonymous]
+    [Authorize]
     public async Task<ActionResult> CancelInterview(int interviewId)
     {
-        var interview = await _context.Interviews
-            .FirstOrDefaultAsync(i => i.Id == interviewId);
-
-        if (interview == null)
+        try
         {
-            return NotFound(new { message = "Interview not found" });
-        }
+            if (interviewId <= 0)
+            {
+                return BadRequest(new { message = "Invalid interview ID" });
+            }
 
-        if (interview.Status == "Cancelled")
+            var interview = await _context.Interviews
+                .Include(i => i.InterviewerProfile)
+                .FirstOrDefaultAsync(i => i.Id == interviewId);
+
+            if (interview == null)
+            {
+                _logger.LogWarning("Cancel interview attempted for non-existent interview: {InterviewId}", interviewId);
+                return NotFound(new { message = "Interview not found" });
+            }
+
+            var userId = AuthorizationHelper.GetCurrentUserId(this);
+            if (userId == null)
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
+            if (interview.InterviewerProfile.UserId != userId)
+            {
+                _logger.LogWarning("Cancel interview attempted by unauthorized user: UserId={UserId}, InterviewId={InterviewId}", userId, interviewId);
+                return Forbid("You can only cancel your own interviews");
+            }
+
+            if (interview.Status == "Cancelled")
+            {
+                return BadRequest(new { message = "Interview is already cancelled" });
+            }
+
+            interview.Status = "Cancelled";
+            interview.UpdatedAt = DateTime.UtcNow;
+
+            var availabilitySlot = await _context.AvailabilitySlots
+                .FirstOrDefaultAsync(a => a.InterviewerProfileId == interview.InterviewerProfileId
+                    && a.Date == interview.ScheduledDate.Date
+                    && a.StartTime <= interview.StartTime
+                    && a.EndTime >= interview.EndTime
+                    && !a.IsAvailable);
+
+            if (availabilitySlot != null)
+            {
+                availabilitySlot.IsAvailable = true;
+                availabilitySlot.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Interview cancelled successfully: InterviewId={InterviewId}", interviewId);
+            return NoContent();
+        }
+        catch (DbUpdateException ex)
         {
-            return BadRequest(new { message = "Interview is already cancelled" });
+            _logger.LogError(ex, "Database error cancelling interview: {InterviewId}", interviewId);
+            return StatusCode(500, new { message = "An error occurred while cancelling the interview. Please try again." });
         }
-
-        interview.Status = "Cancelled";
-        interview.UpdatedAt = DateTime.UtcNow;
-
-        // Mark the availability slot as available again
-        var availabilitySlot = await _context.AvailabilitySlots
-            .FirstOrDefaultAsync(a => a.InterviewerProfileId == interview.InterviewerProfileId
-                && a.Date == interview.ScheduledDate.Date
-                && a.StartTime <= interview.StartTime
-                && a.EndTime >= interview.EndTime
-                && !a.IsAvailable);
-
-        if (availabilitySlot != null)
+        catch (Exception ex)
         {
-            availabilitySlot.IsAvailable = true;
-            availabilitySlot.UpdatedAt = DateTime.UtcNow;
+            _logger.LogError(ex, "Error cancelling interview: {InterviewId}", interviewId);
+            return StatusCode(500, new { message = "An unexpected error occurred. Please try again later." });
         }
-
-        await _context.SaveChangesAsync();
-
-        return NoContent();
     }
 }

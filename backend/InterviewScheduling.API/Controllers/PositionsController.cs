@@ -33,6 +33,7 @@ public class PositionsController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [AllowAnonymous]
     public async Task<ActionResult<OpenPosition>> GetPosition(int id)
     {
         var position = await _context.OpenPositions.FindAsync(id);
