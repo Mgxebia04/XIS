@@ -6,6 +6,8 @@ import { apiService } from '@/services/api'
 import { ChangePassword } from '@/components/ChangePassword'
 import type { Skill, AvailabilitySlot, Interview } from '@/types'
 import { formatDate, getMinDateTime, isFutureDateTime } from '@/utils/dateUtils'
+import { extractErrorMessage } from '@/utils/errorUtils'
+import { ErrorDisplay, SuccessDisplay } from '@/components/ErrorDisplay'
 
 export const PanelDashboard: React.FC = () => {
   const { user, logout } = useAuth()
@@ -148,7 +150,7 @@ export const PanelDashboard: React.FC = () => {
         setUpcomingInterviews(upcoming)
         setPastInterviews(past)
       } catch (err: any) {
-        setError('Failed to load data: ' + (err.message || 'Unknown error'))
+        setError(extractErrorMessage(err))
         hasLoadedData.current = false
       } finally {
         setIsLoadingProfile(false)
@@ -189,7 +191,7 @@ export const PanelDashboard: React.FC = () => {
         secondarySkills,
       })
     } catch (err: any) {
-      setError('Failed to save profile: ' + (err.message || 'Unknown error'))
+      setError(extractErrorMessage(err))
       throw err
     }
   }, [user?.interviewerProfileId])
@@ -268,8 +270,7 @@ export const PanelDashboard: React.FC = () => {
           setNewSlot({ date: '', startTime: '', endTime: '' })
           setError(null) // Clear any previous errors on success
         } catch (err: any) {
-          const errorMessage = err.response?.data?.message || err.message || 'Unknown error'
-          setError('Failed to add availability slot: ' + errorMessage)
+          setError(extractErrorMessage(err))
         }
       } else {
         setError('Please select a future date and time')
@@ -282,7 +283,7 @@ export const PanelDashboard: React.FC = () => {
       await apiService.deleteAvailability(id)
       setAvailabilitySlots((prev) => prev.filter((slot) => slot.id !== id))
     } catch (err: any) {
-      setError('Failed to remove availability slot: ' + (err.message || 'Unknown error'))
+      setError(extractErrorMessage(err))
     }
   }, [])
 
@@ -351,7 +352,7 @@ export const PanelDashboard: React.FC = () => {
         setPastInterviews(past)
       }
     } catch (err: any) {
-      setError('Failed to cancel interview: ' + (err.message || 'Unknown error'))
+      setError(extractErrorMessage(err))
     } finally {
       setIsReloadingInterviews(false)
     }
@@ -364,34 +365,10 @@ export const PanelDashboard: React.FC = () => {
   return (
     <div style={styles.container}>
       {/* Error/Success notification */}
-      {error && (
-        <div style={styles.errorBanner} className="notification-enter fade-in-down">
-          <span style={styles.errorIcon}>⚠️</span>
-          <span>{error}</span>
-          <button
-            onClick={() => setError(null)}
-            style={styles.errorClose}
-            aria-label="Close error"
-            className="button-hover"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-      {success && (
-        <div style={styles.successBanner} className="notification-enter fade-in-down">
-          <span style={styles.successIcon}>✓</span>
-          <span>{success}</span>
-          <button
-            onClick={() => setSuccess(null)}
-            style={styles.errorClose}
-            aria-label="Close success"
-            className="button-hover"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+      <div style={{ position: 'sticky', top: '3.5rem', zIndex: 40 }}>
+        <ErrorDisplay error={error} onDismiss={() => setError(null)} />
+        <SuccessDisplay message={success} onDismiss={() => setSuccess(null)} />
+      </div>
       {/* Header */}
       <header style={styles.header}>
         <div style={styles.headerLeft}>
@@ -484,7 +461,13 @@ export const PanelDashboard: React.FC = () => {
                                   ? { borderBottom: 'none' }
                                   : {}),
                               }}
-                              className="button-hover"
+                              className="skill-dropdown-item-hover"
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = activeSidebarBg
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'white'
+                              }}
                             >
                               <span style={styles.skillDropdownItemIcon}>✓</span>
                               <span>{skill.name}</span>
@@ -1097,20 +1080,24 @@ const styles: { [key: string]: React.CSSProperties } = {
     backgroundColor: 'white',
     border: `1px solid ${borderGray}`,
     borderRadius: '8px',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+    boxShadow: '0 4px 16px rgba(74, 30, 71, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1)',
     minWidth: '280px',
     maxHeight: '400px',
     overflow: 'hidden',
     zIndex: 100,
     display: 'flex',
     flexDirection: 'column',
+    animation: 'dropdownFade 0.2s ease-out',
   },
   skillDropdownHeader: {
     padding: '0.75rem',
     borderBottom: `1px solid ${borderGray}`,
-    backgroundColor: white,
+    backgroundColor: '#f9f9f9',
     display: 'flex',
     alignItems: 'center',
+    position: 'sticky',
+    top: 0,
+    zIndex: 1,
   },
   skillSearchInput: {
     flex: 1,
@@ -1119,9 +1106,10 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: '6px',
     fontSize: '0.875rem',
     outline: 'none',
-    transition: 'border-color 0.2s',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     backgroundColor: white,
     color: textDark,
+    fontFamily: 'inherit',
   },
   skillSearchInputPlaceholder: {
     color: placeholderGray,
@@ -1129,6 +1117,9 @@ const styles: { [key: string]: React.CSSProperties } = {
   skillDropdownList: {
     maxHeight: '300px',
     overflowY: 'auto',
+    padding: '0.25rem 0',
+    scrollbarWidth: 'thin',
+    scrollbarColor: `${borderGray} transparent`,
   },
   skillDropdownItem: {
     padding: '0.875rem 1rem',
@@ -1136,10 +1127,11 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '0.875rem',
     color: textDark,
     borderBottom: `1px solid ${borderGray}`,
-    transition: 'background-color 0.2s',
+    transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
     display: 'flex',
     alignItems: 'center',
     gap: '0.75rem',
+    backgroundColor: white,
   },
   skillDropdownItemHover: {
     backgroundColor: lightGray,

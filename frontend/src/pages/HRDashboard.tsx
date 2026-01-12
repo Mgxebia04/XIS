@@ -589,12 +589,6 @@ export const HRDashboard: React.FC = () => {
                                 onClick={() => toggleSkill(skill.id.toString())}
                                 style={styles.skillDropdownItem}
                                 className="skill-dropdown-item-hover"
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = activeSidebarBg
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'white'
-                                }}
                               >
                                 <input
                                   type="checkbox"
@@ -1239,12 +1233,13 @@ const styles: { [key: string]: React.CSSProperties } = {
     backgroundColor: white,
     border: `1px solid ${borderGray}`,
     borderRadius: '8px',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+    boxShadow: '0 4px 16px rgba(74, 30, 71, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1)',
     zIndex: 100,
     display: 'flex',
     flexDirection: 'column',
     maxHeight: '300px',
     animation: 'dropdownFade 0.2s ease-out',
+    overflow: 'hidden',
   },
   skillDropdownHeader: {
     padding: '0.75rem',

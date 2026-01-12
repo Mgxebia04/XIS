@@ -334,9 +334,14 @@ html {
 }
 
 /* Skill dropdown item hover */
+.skill-dropdown-item-hover {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .skill-dropdown-item-hover:hover {
   background-color: #F5EEF7 !important;
   color: #4a1e47;
+  transform: translateX(2px);
 }
 
 /* Custom scrollbar for dropdowns */
@@ -355,4 +360,20 @@ html {
 
 .skillDropdownList::-webkit-scrollbar-thumb:hover {
   background-color: #b0b0b0;
+}
+
+/* Enhanced dropdown styling for all pages */
+select.select-enhanced option {
+  padding: 0.5rem 0.75rem;
+  background-color: white;
+  color: #333333;
+}
+
+select.select-enhanced option:hover {
+  background-color: #F5EEF7;
+}
+
+select.select-enhanced option:checked {
+  background-color: #4a1e47;
+  color: white;
 }

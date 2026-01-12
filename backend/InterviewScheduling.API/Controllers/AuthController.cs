@@ -47,14 +47,13 @@ public class AuthController : ControllerBase
                 return Unauthorized(new { message = "Invalid email or password" });
             }
 
-            // Note: Password verification is disabled for demo purposes
-            // In production, uncomment the following lines:
-            // var isValidPassword = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
-            // if (!isValidPassword)
-            // {
-            //     _logger.LogWarning("Login attempt with invalid password for user: {Email}", request.Email);
-            //     return Unauthorized(new { message = "Invalid email or password" });
-            // }
+            // Verify password
+            var isValidPassword = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
+            if (!isValidPassword)
+            {
+                _logger.LogWarning("Login attempt with invalid password for user: {Email}", request.Email);
+                return Unauthorized(new { message = "Invalid email or password" });
+            }
 
             var response = new LoginResponse
             {

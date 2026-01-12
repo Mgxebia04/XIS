@@ -3,6 +3,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { apiService } from '@/services/api'
 import { formatDate } from '@/utils/dateUtils'
+import { extractErrorMessage } from '@/utils/errorUtils'
+import { ErrorDisplay, SuccessDisplay } from '@/components/ErrorDisplay'
 
 interface PanelRequest {
   id: number
@@ -50,7 +52,7 @@ export const AdminDashboard: React.FC = () => {
         const requests = await apiService.getPanelRequests()
         setPanelRequests(requests)
       } catch (err: any) {
-        setError('Failed to load panel requests: ' + (err.response?.data?.message || err.message || 'Unknown error'))
+        setError(extractErrorMessage(err))
         hasLoadedRequests.current = false
       } finally {
         setIsLoadingRequests(false)
@@ -65,7 +67,7 @@ export const AdminDashboard: React.FC = () => {
       const requests = await apiService.getPanelRequests()
       setPanelRequests(requests)
     } catch (err: any) {
-      setError('Failed to refresh panel requests: ' + (err.message || 'Unknown error'))
+      setError(extractErrorMessage(err))
     }
   }, [])
 
@@ -100,7 +102,12 @@ export const AdminDashboard: React.FC = () => {
       setHrPassword('')
       setTimeout(() => setSuccess(null), 5000)
     } catch (err: any) {
-      setError('Failed to onboard HR: ' + (err.response?.data?.message || err.message || 'Unknown error'))
+      const errorMessage = extractErrorMessage(err)
+      setError(errorMessage)
+      // Check if it's a 404 error specifically
+      if (err.response?.status === 404) {
+        setError('API endpoint not found. Please ensure the backend server is running and the endpoint is available.')
+      }
     } finally {
       setIsOnboardingHr(false)
     }
@@ -131,7 +138,12 @@ export const AdminDashboard: React.FC = () => {
       await refreshPanelRequests()
       setTimeout(() => setSuccess(null), 5000)
     } catch (err: any) {
-      setError('Failed to create panel member: ' + (err.response?.data?.message || err.message || 'Unknown error'))
+      const errorMessage = extractErrorMessage(err)
+      setError(errorMessage)
+      // Check if it's a 404 error specifically
+      if (err.response?.status === 404) {
+        setError('API endpoint not found. Please ensure the backend server is running and the endpoint is available.')
+      }
     } finally {
       setIsCreatingPanel(false)
     }
@@ -151,9 +163,9 @@ export const AdminDashboard: React.FC = () => {
         setSuccess('Panel request rejected')
         await refreshPanelRequests()
         setTimeout(() => setSuccess(null), 5000)
-      } catch (err: any) {
-        setError('Failed to reject request: ' + (err.response?.data?.message || err.message || 'Unknown error'))
-      } finally {
+    } catch (err: any) {
+      setError(extractErrorMessage(err))
+    } finally {
         setIsRejectingRequest(false)
       }
     },
@@ -168,24 +180,10 @@ export const AdminDashboard: React.FC = () => {
   return (
     <div style={styles.container}>
       {/* Error/Success Banner */}
-      {error && (
-        <div style={styles.errorBanner} className="notification-enter fade-in-down">
-          <span style={styles.errorIcon}>⚠️</span>
-          <span>{error}</span>
-          <button onClick={() => setError(null)} style={styles.errorClose} className="button-hover" aria-label="Close error">
-            ✕
-          </button>
-        </div>
-      )}
-      {success && (
-        <div style={styles.successBanner} className="notification-enter fade-in-down">
-          <span style={styles.successIcon}>✓</span>
-          <span>{success}</span>
-          <button onClick={() => setSuccess(null)} style={styles.errorClose} className="button-hover" aria-label="Close success">
-            ✕
-          </button>
-        </div>
-      )}
+      <div style={{ position: 'sticky', top: '3.5rem', zIndex: 40 }}>
+        <ErrorDisplay error={error} onDismiss={() => setError(null)} />
+        <SuccessDisplay message={success} onDismiss={() => setSuccess(null)} />
+      </div>
 
       {/* Header */}
       <header style={styles.header}>
@@ -254,6 +252,7 @@ export const AdminDashboard: React.FC = () => {
                       style={styles.input}
                       className="input-focus"
                       disabled={isOnboardingHr}
+                      autoComplete="off"
                     />
                   </div>
                   <div style={styles.formGroup}>
@@ -268,6 +267,7 @@ export const AdminDashboard: React.FC = () => {
                       style={styles.input}
                       className="input-focus"
                       disabled={isOnboardingHr}
+                      autoComplete="off"
                     />
                   </div>
                   <div style={styles.formGroup}>
@@ -282,6 +282,7 @@ export const AdminDashboard: React.FC = () => {
                       style={styles.input}
                       className="input-focus"
                       disabled={isOnboardingHr}
+                      autoComplete="new-password"
                     />
                   </div>
                 </div>
@@ -355,6 +356,7 @@ export const AdminDashboard: React.FC = () => {
                               style={styles.passwordInput}
                               className="input-focus"
                               disabled={isCreatingPanel || isRejectingRequest}
+                              autoComplete="new-password"
                             />
                           </div>
                           <div style={styles.actionButtons}>
