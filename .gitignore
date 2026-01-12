@@ -458,3 +458,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local credential notes (not committed)
+.git-credentials-note.txt
