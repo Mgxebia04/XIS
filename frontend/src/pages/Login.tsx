@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T10:09:38Z
+// AIModified:2026-01-12T02:57:00Z
 import React, { useState, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
@@ -145,7 +145,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     alignItems: 'center',
   },
   headerTitleX: {
-    fontSize: '1.5rem',
+    fontSize: '2.5rem',
     fontWeight: '700',
     letterSpacing: '-0.02em',
   },

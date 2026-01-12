@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T19:57:17Z
+// AIModified:2026-01-12T02:57:00Z
 import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -266,6 +266,9 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontWeight: 'bold',
   },
   headerTitleX: {
+    fontSize: '2.5rem',
+    fontWeight: '700',
+    letterSpacing: '-0.02em',
     color: white,
   },
   headerTitleText: {

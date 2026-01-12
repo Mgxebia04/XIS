@@ -1,4 +1,4 @@
-// AIModified:2026-01-11T17:44:28Z
+// AIModified:2026-01-12T02:57:00Z
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -930,7 +930,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     alignItems: 'center',
   },
   headerTitleX: {
-    fontSize: '1.5rem',
+    fontSize: '2.5rem',
     fontWeight: '700',
     letterSpacing: '-0.02em',
   },
@@ -1003,11 +1003,11 @@ const styles: { [key: string]: React.CSSProperties } = {
     gap: '0.75rem',
     padding: '0.75rem',
     borderRadius: '4px',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    color: white,
+    backgroundColor: activeSidebarBg,
+    color: textDark,
     marginBottom: '0.5rem',
     fontSize: '0.875rem',
-    fontWeight: '500',
+    fontWeight: '600',
     position: 'relative',
     borderLeft: '3px solid #E91E63',
   },
